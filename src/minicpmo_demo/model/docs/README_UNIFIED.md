@@ -5,7 +5,7 @@
 ## 背景
 
 原始实现中，单工（Chat/Streaming）和双工（Duplex）分别由不同的类实现：
-- `MiniCPMOForCausalLM`：单工对话
+- `legacy.MiniCPMO`：单工对话
 - `MiniCPMODuplex`：双工对话
 
 这导致两个问题：
@@ -18,8 +18,9 @@
 
 ```
 MiniCPMO（统一入口）
-├── 继承自 MiniCPMOForCausalLM（单工能力）
-└── 组合 DuplexCapability（双工能力）
+├── 保留单工 Chat/Streaming 能力
+├── 组合 DuplexCapability（双工能力）
+└── 通过 services mixins 暴露编译、benchmark、speculation 和 duplex facade API
 ```
 
 ## 核心类
@@ -329,7 +330,7 @@ model.duplex_stop()
 
 | 原始类 | 统一后 |
 |--------|--------|
-| `MiniCPMOForCausalLM` | `MiniCPMO`（继承） |
+| `legacy.MiniCPMO` | `MiniCPMO` |
 | `MiniCPMODuplex` | `DuplexCapability`（组合） |
 
 ## 初始化流程
@@ -522,10 +523,13 @@ print(output.full_text)
 
 ```
 src/minicpmo_demo/model/
-├── modeling_minicpmo.py          # 原始实现
+├── legacy/modeling_minicpmo.py   # 原始实现
 ├── modeling_minicpmo_unified.py  # 统一实现（推荐使用）
+├── capabilities/                 # DuplexCapability 等组合能力
 ├── components/                   # Vision/audio/TTS neural building blocks
+├── docs/                         # 模型说明文档
 ├── runtime/                      # KV cache, StreamDecoder, sampling, streaming helpers
+├── services/                     # Compile, benchmark, speculation, and duplex facade mixins
 ├── processing_minicpmo.py        # Processor and media preprocessing
 ├── configuration_minicpmo.py     # Model configuration
 └── ...
@@ -533,12 +537,12 @@ src/minicpmo_demo/model/
 
 ## 迁移指南
 
-### 从 MiniCPMOForCausalLM 迁移
+### 从旧版 MiniCPMO 迁移
 
 ```python
 # 旧代码
-from minicpmo_demo.model.modeling_minicpmo import MiniCPMOForCausalLM
-model = MiniCPMOForCausalLM.from_pretrained(...)
+from minicpmo_demo.model.legacy.modeling_minicpmo import MiniCPMO
+model = MiniCPMO.from_pretrained(...)
 
 # 新代码
 from minicpmo_demo.model.modeling_minicpmo_unified import MiniCPMO
@@ -550,7 +554,7 @@ model.init_unified(device="cuda")
 
 ```python
 # 旧代码
-from minicpmo_demo.model.modeling_minicpmo import MiniCPMODuplex
+from minicpmo_demo.model.legacy.modeling_minicpmo import MiniCPMODuplex
 duplex = MiniCPMODuplex(model_path=...)
 
 # 新代码

@@ -22,7 +22,7 @@ from transformers import Qwen3Config
 from transformers import WhisperConfig
 from transformers.utils import logging
 
-from .modeling_navit_siglip import SiglipVisionConfig
+from .components.vision_encoder import SiglipVisionConfig
 
 logger = logging.get_logger(__name__)
 

@@ -10,8 +10,11 @@ out of scope.
 - `src/minicpmo_demo/core/`: request schemas, processor factory, capability routing, and mode processors.
 - `src/minicpmo_demo/gateway/`: worker pool, queueing, app registry, and reference-audio registry.
 - `src/minicpmo_demo/model/`: model config, tokenizer/processor files, HF model wrappers, and model assets.
+- `src/minicpmo_demo/model/capabilities/`: composable model capabilities such as duplex streaming.
 - `src/minicpmo_demo/model/components/`: reusable neural-network building blocks.
+- `src/minicpmo_demo/model/legacy/`: original model wrapper kept for reference and migration.
 - `src/minicpmo_demo/model/runtime/`: KV-cache helpers, StreamDecoder, sampling guards, and streaming helpers.
+- `src/minicpmo_demo/model/services/`: model wrapper mixins for compile, benchmarking, speculation, and duplex facade APIs.
 - `src/minicpmo_demo/vad/`: VAD helpers.
 - `src/minicpmo_demo/tools/`: backend/model utilities such as benchmark and precompile.
 - `configs/config.example.json`: tracked example config. Runtime `config.json` stays untracked.

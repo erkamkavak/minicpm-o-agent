@@ -34,11 +34,12 @@ Tracking variables in `StreamDecoder`:
 - **StreamDecoder** (`src/minicpmo_demo/model/runtime/stream_decoder.py`): Owns the KV cache, unit history, system
   prompt protection boundaries, and cache manipulation primitives (`_slice_cache`,
   `_concat_caches`, `_reindex_rope_for_cache`, `_rebuild_cache_with_previous`).
-- **DuplexCapability** (`src/minicpmo_demo/model/modeling_minicpmo_unified.py`): Owns the duplex
+- **DuplexCapability** (`src/minicpmo_demo/model/capabilities/duplex.py`): Owns the duplex
   orchestration (prepare/prefill/generate/finalize), TTS state, and audio processing.
   Delegates cache management to `StreamDecoder`.
-- **MiniCPMO** (`src/minicpmo_demo/model/modeling_minicpmo_unified.py`): Top-level model. Exposes
-  convenience methods like `duplex_prepare()`, `duplex_prefill()`, etc.
+- **MiniCPMO** (`src/minicpmo_demo/model/modeling_minicpmo_unified.py`): Top-level model. Core
+  chat/streaming wrapper; operational helpers and duplex facade methods live in
+  `src/minicpmo_demo/model/services/`.
 
 ### Existing building blocks in StreamDecoder
 
@@ -177,7 +178,7 @@ def update_system_prompt(
   tensors, which temporarily doubles memory. Consider using non-cloning slice for
   performance-sensitive paths.
 
-### Phase 2: DuplexCapability (`modeling_minicpmo_unified.py`)
+### Phase 2: DuplexCapability (`src/minicpmo_demo/model/capabilities/duplex.py`)
 
 #### 2.1 Add `update_system_prompt()` method
 
@@ -766,7 +767,7 @@ def handle_switch_agent(model, tool_call_args):
 | Pass `tools` to `apply_chat_template()` | `src/minicpmo_demo/model/modeling_minicpmo_unified.py` (3 call sites) | ~5 lines each |
 | Wire through `ChatView.chat()` | `src/minicpmo_demo/core/processors/unified.py` | ~5 lines |
 | Parse `<tool_call>` from output | `src/minicpmo_demo/model/modeling_minicpmo_unified.py` | ~30 lines helper |
-| `update_system_prompt()` for duplex tools | `src/minicpmo_demo/model/runtime/stream_decoder.py` + `src/minicpmo_demo/model/modeling_minicpmo_unified.py` | Already covered in Phase 1-3 |
+| `update_system_prompt()` for duplex tools | `src/minicpmo_demo/model/runtime/stream_decoder.py` + `src/minicpmo_demo/model/capabilities/duplex.py` | Already covered in Phase 1-3 |
 
 **Total for basic chat-mode tools**: ~1-2 hours of focused work.
 **Total for full duplex tool switching**: Already covered by the `update_system_prompt()` implementation (~1 day).

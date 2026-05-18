@@ -176,7 +176,7 @@ import librosa
 import numpy as np
 import soundfile as sf
 
-from minicpmo_demo.model.modeling_minicpmo import MiniCPMODuplex
+from minicpmo_demo.model.legacy.modeling_minicpmo import MiniCPMODuplex
 from minicpmo.utils import get_video_frame_audio_segments
 
 # 1. 加载模型
@@ -257,7 +257,7 @@ print(f"完整回复: {model.get_generated_text()}")
 
 - 不带 context 滑窗
 ```python
-from minicpmo_demo.model.modeling_minicpmo import MiniCPMODuplex
+from minicpmo_demo.model.legacy.modeling_minicpmo import MiniCPMODuplex
 
 model = MiniCPMODuplex(
     ...,
@@ -279,7 +279,7 @@ model.prepare(
 
 - 带 context 滑窗
 ```python
-from minicpmo_demo.model.modeling_minicpmo import MiniCPMODuplex
+from minicpmo_demo.model.legacy.modeling_minicpmo import MiniCPMODuplex
 
 model = MiniCPMODuplex(
     ...,
@@ -307,7 +307,7 @@ model.prepare(
 **初始化配置**：
 
 ```python
-from minicpmo_demo.model.modeling_minicpmo import MiniCPMODuplex
+from minicpmo_demo.model.legacy.modeling_minicpmo import MiniCPMODuplex
 
 model = MiniCPMODuplex.from_pretrained(
     ...,
