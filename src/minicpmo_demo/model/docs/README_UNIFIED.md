@@ -528,6 +528,7 @@ src/minicpmo_demo/model/
 ├── capabilities/                 # DuplexCapability 等组合能力
 ├── components/                   # Vision/audio/TTS neural building blocks
 ├── docs/                         # 模型说明文档
+├── hf_assets/                    # Hugging Face tokenizer/processor/generation metadata
 ├── runtime/                      # KV cache, StreamDecoder, sampling, streaming helpers
 ├── services/                     # Compile, benchmark, speculation, and duplex facade mixins
 ├── processing_minicpmo.py        # Processor and media preprocessing

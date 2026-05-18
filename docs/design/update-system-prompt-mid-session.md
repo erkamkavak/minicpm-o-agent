@@ -427,7 +427,7 @@ at the beginning of the session.
 
 | Layer | Tools support | What's missing |
 |---|---|---|
-| **Tokenizer** (`tokenizer_config.json`) | ✅ Full support in chat_template | Nothing — Jinja template handles `tools`, `tool_calls`, `tool` role |
+| **Tokenizer** (`src/minicpmo_demo/model/hf_assets/tokenizer_config.json`) | ✅ Full support in chat_template | Nothing — Jinja template handles `tools`, `tool_calls`, `tool` role |
 | **`model.chat()`** (`modeling_minicpmo_unified.py`) | ❌ `apply_chat_template()` called without `tools=` | Need to pass `tools` kwarg through |
 | **`model.non_streaming_prefill()`** (`modeling_minicpmo_unified.py`) | ❌ Same issue | Same fix |
 | **`model.streaming_prefill()`** (`modeling_minicpmo_unified.py`) | ❌ Same issue | Same fix |

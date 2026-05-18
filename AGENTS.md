@@ -12,6 +12,7 @@ out of scope.
 - `src/minicpmo_demo/model/`: model config, tokenizer/processor files, HF model wrappers, and model assets.
 - `src/minicpmo_demo/model/capabilities/`: composable model capabilities such as duplex streaming.
 - `src/minicpmo_demo/model/components/`: reusable neural-network building blocks.
+- `src/minicpmo_demo/model/hf_assets/`: upstream Hugging Face tokenizer, processor, and generation metadata.
 - `src/minicpmo_demo/model/legacy/`: original model wrapper kept for reference and migration.
 - `src/minicpmo_demo/model/runtime/`: KV-cache helpers, StreamDecoder, sampling guards, and streaming helpers.
 - `src/minicpmo_demo/model/services/`: model wrapper mixins for compile, benchmarking, speculation, and duplex facade APIs.
