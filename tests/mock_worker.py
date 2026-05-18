@@ -10,7 +10,7 @@
 - WS   /ws/duplex       → 模拟 Duplex（prepared → result × N → stopped）
 
 启动方式：
-    PYTHONPATH=. .venv/base/bin/python tests/mock_worker.py --port 22400
+    PYTHONPATH=src .venv/base/bin/python tests/mock_worker.py --port 22400
 
 可配延迟（通过 CLI 参数或运行时 POST /config）：
     --chat-delay     Chat 推理延迟秒数（默认 0.5）

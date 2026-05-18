@@ -12,6 +12,7 @@
 import json
 import os
 import re
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -24,6 +25,10 @@ import pytest
 
 # 项目根目录
 PROJECT_ROOT = Path(__file__).parent.parent
+SRC_ROOT = PROJECT_ROOT / "src"
+
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
 
 # 模型路径（开源仓库使用环境变量，避免硬编码本地路径）
 MODEL_PATH = os.environ.get("MINICPMO45_MODEL_PATH", "/path/to/MiniCPM-o-4_5")

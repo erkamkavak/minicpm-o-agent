@@ -41,13 +41,9 @@ wss://host/v1/realtime?mode={video|audio}
 
 ## 示例代码
 
-完整的客户端实现示例请参考本仓库的全双工 demo 页面，它们直接使用 Realtime API 协议：
+后端协议探针位于 `examples/realtime/`：
 
-| 页面 | 说明 |
+| 脚本 | 说明 |
 |------|------|
-| [`static/omni/`](https://github.com/OpenBMB/MiniCPM-o-Demo/tree/realtime-protocol/static/omni) | 视频双工 — 实时音视频对话 |
-| [`static/audio-duplex/`](https://github.com/OpenBMB/MiniCPM-o-Demo/tree/realtime-protocol/static/audio-duplex) | 音频双工 — 实时纯音频对话 |
-
-核心协议封装库：[`static/duplex/lib/realtime-session.js`](https://github.com/OpenBMB/MiniCPM-o-Demo/blob/realtime-protocol/static/duplex/lib/realtime-session.js)
-
-> 仓库地址：<https://github.com/OpenBMB/MiniCPM-o-Demo/tree/realtime-protocol>
+| `audio_probe.py` | 音频双工探针 |
+| `video_probe.py` | 视频双工探针 |

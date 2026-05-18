@@ -67,7 +67,7 @@ fi
 # 运行 schema 测试（无需 GPU）
 echo ""
 echo "[2/5] 运行 Schema 测试..."
-if PYTHONPATH=. .venv/base/bin/python -m pytest tests/test_schemas.py -v --tb=short; then
+if PYTHONPATH=src .venv/base/bin/python -m pytest tests/test_schemas.py -v --tb=short; then
     echo "✓ Schema 测试通过"
 else
     echo "✗ Schema 测试失败"
@@ -88,7 +88,7 @@ fi
 # 运行 Chat 测试（需要 GPU）
 echo ""
 echo "[3/5] 运行 Chat 测试（需要 GPU）..."
-if CUDA_VISIBLE_DEVICES=$GPU PYTHONPATH=. .venv/base/bin/python -m pytest tests/test_chat.py -v -s --tb=short; then
+if CUDA_VISIBLE_DEVICES=$GPU PYTHONPATH=src .venv/base/bin/python -m pytest tests/test_chat.py -v -s --tb=short; then
     echo "✓ Chat 测试通过"
 else
     echo "✗ Chat 测试失败"
@@ -98,7 +98,7 @@ fi
 # 运行 Streaming 测试（需要 GPU）
 echo ""
 echo "[4/5] 运行 Streaming 测试（需要 GPU）..."
-if CUDA_VISIBLE_DEVICES=$GPU PYTHONPATH=. .venv/base/bin/python -m pytest tests/test_streaming.py -v -s --tb=short; then
+if CUDA_VISIBLE_DEVICES=$GPU PYTHONPATH=src .venv/base/bin/python -m pytest tests/test_streaming.py -v -s --tb=short; then
     echo "✓ Streaming 测试通过"
 else
     echo "✗ Streaming 测试失败"
@@ -108,7 +108,7 @@ fi
 # 运行 Duplex 测试（需要 GPU）
 echo ""
 echo "[5/5] 运行 Duplex 测试（需要 GPU）..."
-if CUDA_VISIBLE_DEVICES=$GPU PYTHONPATH=. .venv/base/bin/python -m pytest tests/test_duplex.py -v -s --tb=short; then
+if CUDA_VISIBLE_DEVICES=$GPU PYTHONPATH=src .venv/base/bin/python -m pytest tests/test_duplex.py -v -s --tb=short; then
     echo "✓ Duplex 测试通过"
 else
     echo "✗ Duplex 测试失败"

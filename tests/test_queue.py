@@ -18,8 +18,8 @@ import pytest
 from datetime import datetime, timedelta
 from typing import Optional
 
-from gateway_modules.models import GatewayWorkerStatus, EtaConfig
-from gateway_modules.worker_pool import WorkerPool, WorkerConnection
+from minicpmo_demo.gateway.models import GatewayWorkerStatus, EtaConfig
+from minicpmo_demo.gateway.worker_pool import WorkerPool, WorkerConnection
 
 
 # ============ Fixtures ============

@@ -8,8 +8,6 @@ __pycache__/
 dist/
 build/
 
-node_modules/
-
 config.json
 data/
 tmp/
@@ -18,7 +16,7 @@ temp/
 tests/results/
 
 *.safetensors
-MiniCPMO45/assets/
+src/minicpmo_demo/model/assets/
 resources/
 
 .idea/
@@ -27,10 +25,6 @@ resources/
 *.swo
 playbook/
 
-/public/
-docs-app/.next/
-docs-app/.source/
-docs-app/out/
 torch_compile_cache/
 AutoAWQ/
 dev_tools/

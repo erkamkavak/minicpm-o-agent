@@ -12,7 +12,7 @@
 
 运行：
     cd /user/sunweiyue/lib/swy-dev/minicpmo45_service
-    PYTHONPATH=. .venv/base/bin/python -m pytest tests/test_integration.py -v -s
+    PYTHONPATH=src .venv/base/bin/python -m pytest tests/test_integration.py -v -s
 """
 
 import asyncio
@@ -34,6 +34,7 @@ import websockets
 GATEWAY_BASE_PORT = 19900  # 测试用端口基址，避免与正式服务冲突
 WORKER_BASE_PORT = 19950
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SRC_ROOT = os.path.join(PROJECT_ROOT, "src")
 PYTHON = os.path.join(PROJECT_ROOT, ".venv", "base", "bin", "python")
 
 # 超时配置
@@ -65,7 +66,7 @@ class ProcessManager:
         proc = subprocess.Popen(
             cmd,
             cwd=PROJECT_ROOT,
-            env={**os.environ, "PYTHONPATH": PROJECT_ROOT},
+            env={**os.environ, "PYTHONPATH": f"{SRC_ROOT}:{PROJECT_ROOT}"},
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
@@ -76,7 +77,7 @@ class ProcessManager:
         """启动 Gateway 进程（HTTP 模式，无需证书）"""
         workers_str = ",".join(worker_addresses)
         cmd = [
-            PYTHON, os.path.join(PROJECT_ROOT, "gateway.py"),
+            PYTHON, "-m", "minicpmo_demo.server.gateway",
             "--port", str(port),
             "--http",
             "--workers", workers_str,
@@ -85,7 +86,7 @@ class ProcessManager:
         proc = subprocess.Popen(
             cmd,
             cwd=PROJECT_ROOT,
-            env={**os.environ, "PYTHONPATH": PROJECT_ROOT},
+            env={**os.environ, "PYTHONPATH": SRC_ROOT},
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )

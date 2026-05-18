@@ -14,20 +14,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         python3-pip \
         ffmpeg \
         openssl \
-        curl \
         git \
     && ln -sf /usr/bin/python${PYTHON_VERSION} /usr/bin/python \
     && ln -sf /usr/bin/python${PYTHON_VERSION} /usr/bin/python3 \
     && rm -rf /var/lib/apt/lists/*
 
 RUN python -m pip install --no-cache-dir --upgrade pip setuptools wheel
-
-# ============ Frontend/docs build toolchain ============
-
-ENV BUN_INSTALL=/root/.bun
-ENV PATH="${BUN_INSTALL}/bin:${PATH}"
-
-RUN curl -fsSL https://bun.sh/install | bash
 
 # ============ PyTorch (CUDA 12.8) ============
 
@@ -47,16 +39,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 RUN chmod +x docker-entrypoint.sh
 
-# Build static frontend/docs assets into static/.
-RUN if [ -f frontend/mobile/package.json ]; then \
-        cd frontend/mobile && bun install --frozen-lockfile && bun run build:static; \
-    fi && \
-    if [ -f docs-app/package.json ]; then \
-        cd docs-app && bun install --frozen-lockfile && bun run build; \
-    fi
-
 # Ensure config.json exists (user should mount their own)
-RUN if [ ! -f config.json ]; then cp config.example.json config.json; fi
+RUN if [ ! -f config.json ]; then cp configs/config.example.json config.json; fi
 
 # ============ Runtime directories ============
 
@@ -64,7 +48,7 @@ RUN mkdir -p tmp data torch_compile_cache
 
 # ============ Environment ============
 
-ENV PYTHONPATH=/app \
+ENV PYTHONPATH=/app/src \
     PYTHONUNBUFFERED=1 \
     TORCHINDUCTOR_CACHE_DIR=/app/torch_compile_cache
 

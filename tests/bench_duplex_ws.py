@@ -5,7 +5,7 @@
 
 用法:
     cd /user/sunweiyue/lib/swy-dev/minicpmo45_service
-    PYTHONPATH=. .venv/base/bin/python tests/bench_duplex_ws.py
+    PYTHONPATH=src .venv/base/bin/python tests/bench_duplex_ws.py
 """
 
 import asyncio

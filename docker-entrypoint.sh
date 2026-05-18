@@ -34,7 +34,7 @@ if [ -d "$WORKSPACE" ]; then
         echo "[Workspace] Using config.json from workspace"
     else
         echo "[Workspace] config.json not found, auto-creating from template"
-        cp /app/config.example.json "$WORKSPACE/config.json"
+        cp /app/configs/config.example.json "$WORKSPACE/config.json"
         # If local model exists, patch model_path to use workspace path
         if [ -d "$WORKSPACE/models/MiniCPM-o-4_5" ]; then
             python -c "
@@ -102,8 +102,8 @@ fi
 
 # ============ Read config ============
 
-GATEWAY_PORT="${GATEWAY_PORT:-$(python -c "from config import get_config; print(get_config().gateway_port)" 2>/dev/null || echo 8006)}"
-WORKER_BASE_PORT="${WORKER_BASE_PORT:-$(python -c "from config import get_config; print(get_config().worker_base_port)" 2>/dev/null || echo 22400)}"
+GATEWAY_PORT="${GATEWAY_PORT:-$(python -c "from minicpmo_demo.config import get_config; print(get_config().gateway_port)" 2>/dev/null || echo 8006)}"
+WORKER_BASE_PORT="${WORKER_BASE_PORT:-$(python -c "from minicpmo_demo.config import get_config; print(get_config().worker_base_port)" 2>/dev/null || echo 22400)}"
 
 # ============ Detect GPUs ============
 
@@ -148,7 +148,7 @@ for GPU_ID in $(echo "$GPU_LIST" | tr ',' ' '); do
     WORKER_PORT=$((WORKER_BASE_PORT + GPU_IDX))
     echo "[Worker $GPU_IDX] Starting on GPU $GPU_ID, port $WORKER_PORT..."
 
-    CUDA_VISIBLE_DEVICES=$GPU_ID python worker.py \
+    CUDA_VISIBLE_DEVICES=$GPU_ID python -m minicpmo_demo.server.worker \
         --port $WORKER_PORT \
         --gpu-id $GPU_ID \
         --worker-index $GPU_IDX \
@@ -196,7 +196,7 @@ done
 echo ""
 echo "[Gateway] Starting on port $GATEWAY_PORT..."
 
-python gateway.py \
+python -m minicpmo_demo.server.gateway \
     --port $GATEWAY_PORT \
     --workers "$WORKER_ADDRS" \
     $GATEWAY_EXTRA_ARGS \
@@ -221,8 +221,7 @@ fi
 echo ""
 echo "=================================================="
 echo "  Service is running!"
-echo "  Chat Demo:  ${GATEWAY_PROTO}://localhost:$GATEWAY_PORT"
-echo "  Admin:      ${GATEWAY_PROTO}://localhost:$GATEWAY_PORT/admin"
+echo "  Gateway:    ${GATEWAY_PROTO}://localhost:$GATEWAY_PORT"
 echo "  API Docs:   ${GATEWAY_PROTO}://localhost:$GATEWAY_PORT/docs"
 echo "  Workers:    $WORKER_ADDRS"
 echo "=================================================="

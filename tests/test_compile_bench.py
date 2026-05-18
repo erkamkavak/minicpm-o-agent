@@ -7,7 +7,7 @@ Prints a side-by-side timing comparison at the end.
 
 Usage:
     CUDA_VISIBLE_DEVICES=0 TORCHINDUCTOR_CACHE_DIR=./torch_compile_cache \
-        PYTHONPATH=. .venv/base/bin/python test_compile_bench.py
+        PYTHONPATH=src .venv/base/bin/python test_compile_bench.py
 """
 
 import os
@@ -15,7 +15,7 @@ import sys
 import time
 import logging
 import torch
-from config import get_config
+from minicpmo_demo.config import get_config
 
 logging.basicConfig(
     level=logging.INFO,
@@ -159,7 +159,7 @@ def main():
     print(f"  Max chunks: {MAX_CHUNKS}")
     print()
 
-    from core.processors.unified import UnifiedProcessor
+    from minicpmo_demo.core.processors.unified import UnifiedProcessor
 
     logger.info("加载模型 (compile=True)...")
     t0 = time.time()

@@ -2,12 +2,12 @@
 """Test script for torch.compile dynamic switching between modes.
 
 Usage:
-    CUDA_VISIBLE_DEVICES=0 PYTHONPATH=. .venv/base/bin/python test_compile_switch.py
+    CUDA_VISIBLE_DEVICES=0 PYTHONPATH=src .venv/base/bin/python test_compile_switch.py
 """
 
 import time
 import torch
-from config import get_config
+from minicpmo_demo.config import get_config
 
 
 def module_type_label(mod) -> str:
@@ -43,7 +43,7 @@ def main():
     print(f"  compile: True (强制开启以测试切换)")
     print()
 
-    from core.processors.unified import UnifiedProcessor
+    from minicpmo_demo.core.processors.unified import UnifiedProcessor
 
     print("[1/2] 加载模型 (compile=True)...")
     t0 = time.time()

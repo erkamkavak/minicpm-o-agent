@@ -10,7 +10,7 @@
 
 运行命令：
 cd /user/sunweiyue/lib/swy-dev/minicpmo45_service
-CUDA_VISIBLE_DEVICES=0 PYTHONPATH=. .venv/base/bin/python -m pytest tests/test_duplex.py -v -s
+CUDA_VISIBLE_DEVICES=0 PYTHONPATH=src .venv/base/bin/python -m pytest tests/test_duplex.py -v -s
 """
 
 import sys
@@ -40,13 +40,13 @@ from conftest import (
     assert_expected,
 )
 
-from core.schemas import (
+from minicpmo_demo.core.schemas import (
     DuplexConfig,
     DuplexOfflineInput,
     DuplexOfflineOutput,
     DuplexChunkResult,
 )
-from core.processors import UnifiedProcessor, DuplexView
+from minicpmo_demo.core.processors import UnifiedProcessor, DuplexView
 
 
 # =============================================================================

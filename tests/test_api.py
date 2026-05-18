@@ -7,13 +7,13 @@
     cd /user/sunweiyue/lib/swy-dev/minicpmo45_service
 
     # 1. 启动 Worker（另一个终端）
-    CUDA_VISIBLE_DEVICES=1 PYTHONPATH=. .venv/base/bin/python worker.py --worker-index 0
+    CUDA_VISIBLE_DEVICES=1 PYTHONPATH=src .venv/base/bin/python -m minicpmo_demo.server.worker --worker-index 0
 
     # 2. 运行测试
-    PYTHONPATH=. .venv/base/bin/python -m pytest tests/test_api.py -v -s
+    PYTHONPATH=src .venv/base/bin/python -m pytest tests/test_api.py -v -s
 
     # 或只运行快速测试（不需要 GPU）
-    PYTHONPATH=. .venv/base/bin/python -m pytest tests/test_api.py -v -s -k "not gpu"
+    PYTHONPATH=src .venv/base/bin/python -m pytest tests/test_api.py -v -s -k "not gpu"
 """
 
 import os
@@ -33,9 +33,9 @@ logger = logging.getLogger("test_api")
 
 # ============ 配置 ============
 
-# 从 config.py 读取默认端口
+# 从 minicpmo_demo.config 读取默认端口
 try:
-    from config import get_config
+    from minicpmo_demo.config import get_config
     _cfg = get_config()
     _default_worker_url = f"http://localhost:{_cfg.worker_base_port}"
     _default_gateway_url = f"http://localhost:{_cfg.gateway_port}"

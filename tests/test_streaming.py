@@ -9,7 +9,7 @@
 
 运行命令：
 cd /user/sunweiyue/lib/swy-dev/minicpmo45_service
-CUDA_VISIBLE_DEVICES=0 PYTHONPATH=. .venv/base/bin/python -m pytest tests/test_streaming.py -v -s
+CUDA_VISIBLE_DEVICES=0 PYTHONPATH=src .venv/base/bin/python -m pytest tests/test_streaming.py -v -s
 """
 
 import base64
@@ -35,7 +35,7 @@ from conftest import (
     assert_expected,
 )
 
-from core.schemas import (
+from minicpmo_demo.core.schemas import (
     StreamingRequest,
     StreamingChunk,
     Message,
@@ -44,7 +44,7 @@ from core.schemas import (
     AudioContent,
     ImageContent,
 )
-from core.processors import UnifiedProcessor, HalfDuplexView
+from minicpmo_demo.core.processors import UnifiedProcessor, HalfDuplexView
 
 
 # =============================================================================
@@ -224,7 +224,7 @@ class TestCompleteTurn:
     
     def test_complete_turn_text_only(self, processor, case_saver):
         """测试：complete_turn 纯文本生成"""
-        from core.schemas import Message, Role
+        from minicpmo_demo.core.schemas import Message, Role
         saver: CaseSaver = case_saver("complete_turn_text_only", "streaming")
         
         session_id = f"complete_turn_text_{int(time.time())}"
@@ -257,7 +257,7 @@ class TestCompleteTurn:
     
     def test_complete_turn_with_audio(self, processor, case_saver):
         """测试：complete_turn 带音频生成"""
-        from core.schemas import Message, Role
+        from minicpmo_demo.core.schemas import Message, Role
         import soundfile as sf
         saver: CaseSaver = case_saver("complete_turn_with_audio", "streaming")
         
@@ -301,7 +301,7 @@ class TestCompleteTurn:
     
     def test_complete_turn_multi_turn(self, processor, case_saver):
         """测试：complete_turn 多轮对话（KV Cache 复用）"""
-        from core.schemas import Message, Role
+        from minicpmo_demo.core.schemas import Message, Role
         saver: CaseSaver = case_saver("complete_turn_multi_turn", "streaming")
         
         session_id = f"complete_turn_multi_{int(time.time())}"

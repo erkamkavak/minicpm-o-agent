@@ -10,7 +10,7 @@
 
 运行：
     cd /user/sunweiyue/lib/swy-dev/minicpmo45_service
-    PYTHONPATH=. .venv/base/bin/python -m pytest tests/test_e2e.py -v -s
+    PYTHONPATH=src .venv/base/bin/python -m pytest tests/test_e2e.py -v -s
 
 Duplex 前端模拟：
     - 通过 WebSocket 发送 prepare/audio_chunk/stop 消息
@@ -42,6 +42,7 @@ E2E_WORKER_BASE_PORT = 18900
 E2E_GPUS = [1, 2, 3]  # 使用的 GPU（避免 GPU 0 已有服务）
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SRC_ROOT = os.path.join(PROJECT_ROOT, "src")
 PYTHON = os.path.join(PROJECT_ROOT, ".venv", "base", "bin", "python")
 
 STARTUP_TIMEOUT = 120.0  # Worker 加载模型可能需要较长时间
@@ -60,14 +61,14 @@ class E2EProcessManager:
     def start_real_worker(self, port: int, gpu_id: int, worker_index: int) -> subprocess.Popen:
         """启动真实 Worker 进程"""
         cmd = [
-            PYTHON, os.path.join(PROJECT_ROOT, "worker.py"),
+            PYTHON, "-m", "minicpmo_demo.server.worker",
             "--port", str(port),
             "--gpu-id", str(gpu_id),
             "--worker-index", str(worker_index),
         ]
         env = {
             **os.environ,
-            "PYTHONPATH": PROJECT_ROOT,
+            "PYTHONPATH": SRC_ROOT,
             "CUDA_VISIBLE_DEVICES": str(gpu_id),
         }
         proc = subprocess.Popen(
@@ -80,7 +81,7 @@ class E2EProcessManager:
     def start_gateway(self, port: int, worker_addresses: List[str]) -> subprocess.Popen:
         """启动 Gateway 进程"""
         cmd = [
-            PYTHON, os.path.join(PROJECT_ROOT, "gateway.py"),
+            PYTHON, "-m", "minicpmo_demo.server.gateway",
             "--port", str(port),
             "--http",
             "--workers", ",".join(worker_addresses),
@@ -91,7 +92,7 @@ class E2EProcessManager:
         log_file = open(log_path, "w")
         proc = subprocess.Popen(
             cmd, cwd=PROJECT_ROOT,
-            env={**os.environ, "PYTHONPATH": PROJECT_ROOT},
+            env={**os.environ, "PYTHONPATH": SRC_ROOT},
             stdout=log_file, stderr=subprocess.STDOUT,
         )
         self.gateways.append(proc)

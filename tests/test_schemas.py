@@ -5,13 +5,13 @@
 
 运行命令：
 cd /user/sunweiyue/lib/swy-dev/minicpmo45_service
-PYTHONPATH=. .venv/base/bin/python -m pytest tests/test_schemas.py -v
+PYTHONPATH=src .venv/base/bin/python -m pytest tests/test_schemas.py -v
 """
 
 import pytest
 from pydantic import ValidationError
 
-from core.schemas import (
+from minicpmo_demo.core.schemas import (
     # 枚举
     Role, TTSMode, ContentType,
     # 内容类型
@@ -395,14 +395,14 @@ class TestStreamingSchemas:
     
     def test_streaming_config_defaults(self):
         """StreamingConfig 默认值"""
-        from core.schemas import StreamingConfig
+        from minicpmo_demo.core.schemas import StreamingConfig
         config = StreamingConfig()
         assert config.generate_audio is True
         assert config.audio_token_chunk_size == 25
     
     def test_streaming_request_minimal(self):
         """StreamingRequest 最小请求"""
-        from core.schemas import StreamingRequest
+        from minicpmo_demo.core.schemas import StreamingRequest
         request = StreamingRequest(
             session_id="test_001",
             messages=[Message(role=Role.USER, content="你好")],
@@ -413,7 +413,7 @@ class TestStreamingSchemas:
     
     def test_streaming_request_with_config(self):
         """StreamingRequest 带配置"""
-        from core.schemas import StreamingRequest, StreamingConfig
+        from minicpmo_demo.core.schemas import StreamingRequest, StreamingConfig
         request = StreamingRequest(
             session_id="test_002",
             messages=[Message(role=Role.USER, content="你好")],
@@ -425,7 +425,7 @@ class TestStreamingSchemas:
     
     def test_streaming_chunk(self):
         """StreamingChunk"""
-        from core.schemas import StreamingChunk
+        from minicpmo_demo.core.schemas import StreamingChunk
         chunk = StreamingChunk(
             chunk_index=0,
             text_delta="你好",
@@ -438,7 +438,7 @@ class TestStreamingSchemas:
     
     def test_streaming_chunk_final(self):
         """StreamingChunk 最终块"""
-        from core.schemas import StreamingChunk
+        from minicpmo_demo.core.schemas import StreamingChunk
         chunk = StreamingChunk(
             chunk_index=5,
             is_final=True,
@@ -450,7 +450,7 @@ class TestStreamingSchemas:
     
     def test_streaming_response(self):
         """StreamingResponse"""
-        from core.schemas import StreamingResponse
+        from minicpmo_demo.core.schemas import StreamingResponse
         response = StreamingResponse(
             session_id="test_001",
             full_text="你好世界",
@@ -470,7 +470,7 @@ class TestDuplexSchemas:
     
     def test_duplex_config_defaults(self):
         """DuplexConfig 默认值"""
-        from core.schemas import DuplexConfig
+        from minicpmo_demo.core.schemas import DuplexConfig
         config = DuplexConfig()
         assert config.generate_audio is True
         assert config.ls_mode == "explicit"
@@ -479,7 +479,7 @@ class TestDuplexSchemas:
     
     def test_duplex_config_custom(self):
         """DuplexConfig 自定义值"""
-        from core.schemas import DuplexConfig
+        from minicpmo_demo.core.schemas import DuplexConfig
         config = DuplexConfig(
             generate_audio=False,
             temperature=0.5,
@@ -491,7 +491,7 @@ class TestDuplexSchemas:
     
     def test_duplex_prepare_request(self):
         """DuplexPrepareRequest"""
-        from core.schemas import DuplexPrepareRequest
+        from minicpmo_demo.core.schemas import DuplexPrepareRequest
         request = DuplexPrepareRequest(
             prefix_system_prompt="你是助手",
             suffix_system_prompt="请简短回复",
@@ -502,7 +502,7 @@ class TestDuplexSchemas:
     
     def test_duplex_prefill_request(self):
         """DuplexPrefillRequest"""
-        from core.schemas import DuplexPrefillRequest
+        from minicpmo_demo.core.schemas import DuplexPrefillRequest
         request = DuplexPrefillRequest(
             audio_path="/path/to/user_audio.wav",
             max_slice_nums=2,
@@ -512,7 +512,7 @@ class TestDuplexSchemas:
     
     def test_duplex_generate_result(self):
         """DuplexGenerateResult"""
-        from core.schemas import DuplexGenerateResult
+        from minicpmo_demo.core.schemas import DuplexGenerateResult
         result = DuplexGenerateResult(
             is_listen=False,
             text="你好",
@@ -526,7 +526,7 @@ class TestDuplexSchemas:
     
     def test_duplex_generate_result_listen(self):
         """DuplexGenerateResult listen 状态"""
-        from core.schemas import DuplexGenerateResult
+        from minicpmo_demo.core.schemas import DuplexGenerateResult
         result = DuplexGenerateResult(
             is_listen=True,
             end_of_turn=False,

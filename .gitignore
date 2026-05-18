@@ -10,19 +10,8 @@ __pycache__/
 dist/
 build/
 
-# Node
-node_modules/
-static/mobile/
-docs-app/.next/
-docs-app/.source/
-docs-app/out/
-static/docs/
-
 # 本地配置与运行时（用户从 config.example.json 复制）
 config.json
-# certs/
-certs/mobile-remote-*.pem
-mobile_gateway_*.log
 
 # 运行时数据
 data/
@@ -36,7 +25,7 @@ tests/results/
 
 # 模型权重与大型资源（用户自行准备）
 *.safetensors
-MiniCPMO45/assets/
+src/minicpmo_demo/model/assets/
 resources/
 
 # IDE（可选）
@@ -45,8 +34,6 @@ resources/
 *.swp
 *.swo
 playbook/
-
-public/
 
 torch_compile_cache/
 AutoAWQ/
