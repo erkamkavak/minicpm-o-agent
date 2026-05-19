@@ -149,6 +149,9 @@ class DuplexCapability:
         self.decoder = StreamDecoder(
             llm=self.model.llm, tokenizer=self.tokenizer, forbidden_token_ids=self.forbidden_token_ids
         )
+        self._prefix_system_prompt: Optional[str] = None
+        self._suffix_system_prompt: Optional[str] = None
+        self._ref_audio: Optional[np.ndarray] = None
         
         # 滑窗模式: "off" / "basic" / "context"
         sliding_window_mode = kwargs.get("sliding_window_mode", "off")
@@ -361,6 +364,67 @@ class DuplexCapability:
             return full_prompt
 
         return ""
+
+    @property
+    def supports_system_prompt_update(self) -> bool:
+        """Whether the current duplex session has a cache that can be updated."""
+        return self.decoder.get_cache_length() > 0
+
+    def update_system_prompt(
+        self,
+        prefix_system_prompt: Optional[str] = None,
+        suffix_system_prompt: Optional[str] = None,
+        ref_audio: Optional[np.ndarray] = None,
+    ) -> bool:
+        """Update the protected system prompt span without resetting duplex history."""
+        if self.needs_finalize:
+            logger.info("[Duplex] update_system_prompt: flushing pending finalize")
+            self.finalize_unit()
+
+        if not self.supports_system_prompt_update:
+            raise RuntimeError("Duplex session is not prepared; call prepare() first")
+
+        if suffix_system_prompt is None:
+            suffix_system_prompt = self._suffix_system_prompt or ""
+        if prefix_system_prompt is None:
+            prefix_system_prompt = self._prefix_system_prompt or ""
+
+        prefix_token_ids = (
+            self.tokenizer.encode(prefix_system_prompt, add_special_tokens=False)
+            if prefix_system_prompt
+            else []
+        )
+        suffix_token_ids = (
+            self.tokenizer.encode(suffix_system_prompt, add_special_tokens=False)
+            if suffix_system_prompt
+            else []
+        )
+
+        if ref_audio is None:
+            ref_audio = self._ref_audio
+
+        ref_embeds = None
+        if ref_audio is not None:
+            data = self.processor.process_audio([ref_audio])
+            embeds_nested = self.model.get_audio_embedding(
+                data,
+                chunk_length=self.model.config.audio_chunk_length,
+            )
+            ref_embeds = torch.cat([t for g in embeds_nested for t in g], dim=0) if embeds_nested else None
+
+        updated = self.decoder.update_system_prompt(
+            new_prefix_token_ids=prefix_token_ids,
+            new_suffix_token_ids=suffix_token_ids,
+            new_ref_audio_embeds=ref_embeds,
+        )
+        if updated:
+            self._prefix_system_prompt = prefix_system_prompt
+            self._suffix_system_prompt = suffix_system_prompt
+            self._ref_audio = ref_audio
+            self._reset_token2wav_for_new_turn()
+            self.tts_past_key_values = None
+            self.tts_text_start_pos = 0
+        return updated
 
     @torch.no_grad()
     def streaming_prefill(

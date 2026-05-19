@@ -43,6 +43,21 @@ class DuplexProxyMixin:
             prompt_wav_path=prompt_wav_path,
             context_previous_marker=context_previous_marker,
         )
+
+    def duplex_update_system_prompt(
+        self,
+        prefix_system_prompt: Optional[str] = None,
+        suffix_system_prompt: Optional[str] = None,
+        ref_audio: Optional[np.ndarray] = None,
+    ) -> bool:
+        """Update the active duplex session system prompt without resetting history."""
+        if self.duplex is None:
+            raise RuntimeError("Duplex 未初始化，请先调用 init_unified()")
+        return self.duplex.update_system_prompt(
+            prefix_system_prompt=prefix_system_prompt,
+            suffix_system_prompt=suffix_system_prompt,
+            ref_audio=ref_audio,
+        )
     
     def duplex_prefill(
         self,
@@ -302,4 +317,3 @@ class DuplexProxyMixin:
                 "audio_chunks": audio_chunks,
                 "error": str(e),
             }
-

@@ -914,6 +914,32 @@ class DuplexView:
         
         logger.info(f"双工会话准备完成")
         return prompt
+
+    def update_system_prompt(
+        self,
+        system_prompt_text: Optional[str] = None,
+        tools: Optional[List[dict]] = None,
+        ref_audio_path: Optional[str] = None,
+    ) -> bool:
+        """更新当前双工会话的 system prompt，同时保留 KV cache 中的对话历史。"""
+        if system_prompt_text is None:
+            system_prompt_text = "Streaming Omni Conversation."
+        tool_block = build_tool_instruction_block(tools)
+        if tool_block:
+            system_prompt_text = f"{system_prompt_text}\n\n{tool_block}"
+
+        prefix_system_prompt = f"<|im_start|>system\n{system_prompt_text}\n<|audio_start|>"
+        suffix_system_prompt = "<|audio_end|><|im_end|>"
+
+        ref_audio = None
+        if ref_audio_path:
+            ref_audio = self._load_ref_audio(ref_audio_path)
+
+        return self._model.duplex_update_system_prompt(
+            prefix_system_prompt=prefix_system_prompt,
+            suffix_system_prompt=suffix_system_prompt,
+            ref_audio=ref_audio,
+        )
     
     def prefill(
         self,

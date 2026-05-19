@@ -472,6 +472,20 @@ class MiniCPMOWorker:
             prompt_wav_path=prompt_wav_path,
         )
 
+    def duplex_update_system_prompt(
+        self,
+        system_prompt_text: Optional[str] = None,
+        tools: Optional[List[dict]] = None,
+        ref_audio_path: Optional[str] = None,
+    ) -> bool:
+        """Update Duplex system prompt while preserving the active KV cache."""
+        duplex_view = self.processor.set_duplex_mode()
+        return duplex_view.update_system_prompt(
+            system_prompt_text=system_prompt_text,
+            tools=tools,
+            ref_audio_path=ref_audio_path,
+        )
+
     def duplex_prefill(
         self,
         audio_waveform: Optional[np.ndarray] = None,
@@ -1596,6 +1610,54 @@ async def duplex_ws(ws: WebSocket):
                     await ws.send_json({"type": "error", "error": str(e)})
                 finally:
                     # 清理临时文件
+                    import os
+                    for tmp_path in temp_files:
+                        try:
+                            os.unlink(tmp_path)
+                        except OSError:
+                            pass
+
+            elif msg_type == "update_system_prompt":
+                await finalize_done.wait()
+
+                system_prompt = msg.get("system_prompt", "You are a helpful assistant.")
+                tools = msg.get("tools")
+                ref_audio_path = msg.get("ref_audio_path")
+                ref_audio_b64 = msg.get("ref_audio_base64")
+
+                import tempfile
+                import soundfile as sf
+                actual_ref_audio_path = ref_audio_path
+                temp_files: list = []
+
+                if ref_audio_b64 and not ref_audio_path:
+                    ref_bytes = base64.b64decode(ref_audio_b64)
+                    ref_ndarray = np.frombuffer(ref_bytes, dtype=np.float32)
+                    tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False, prefix="duplex_update_ref_")
+                    sf.write(tmp.name, ref_ndarray, 16000)
+                    actual_ref_audio_path = tmp.name
+                    temp_files.append(tmp.name)
+
+                try:
+                    updated = await asyncio.to_thread(
+                        worker.duplex_update_system_prompt,
+                        system_prompt_text=system_prompt,
+                        tools=tools,
+                        ref_audio_path=actual_ref_audio_path,
+                    )
+                    if session_recorder:
+                        session_recorder.update_config(
+                            {
+                                "system_prompt": system_prompt,
+                                "tools": tools,
+                                "system_prompt_updated_at_chunk": chunk_idx,
+                            }
+                        )
+                    await ws.send_json({"type": "system_prompt_updated", "success": updated})
+                except Exception as e:
+                    logger.error(f"Duplex system prompt update failed: {e}", exc_info=True)
+                    await ws.send_json({"type": "error", "error": str(e)})
+                finally:
                     import os
                     for tmp_path in temp_files:
                         try:

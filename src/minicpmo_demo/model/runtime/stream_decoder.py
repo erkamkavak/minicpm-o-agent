@@ -381,6 +381,99 @@ class StreamDecoder:
         self._previous_text = ""
         self._previous_token_ids = []
 
+    @torch.no_grad()
+    def update_system_prompt(
+        self,
+        new_prefix_token_ids: List[int],
+        new_suffix_token_ids: List[int],
+        new_ref_audio_embeds: Optional[torch.Tensor] = None,
+    ) -> bool:
+        """Replace the protected duplex system prompt span while preserving units."""
+        if self.cache is None:
+            return False
+
+        total_len = self.get_cache_length()
+        if total_len <= 0:
+            return False
+
+        if self._preserve_prefix_length or self._suffix_token_ids or self._previous_content_length:
+            old_system_end = (
+                self._preserve_prefix_length
+                + self._previous_content_length
+                + len(self._suffix_token_ids)
+            )
+        else:
+            old_system_end = self._system_preserve_length
+        old_system_end = min(old_system_end, total_len)
+
+        units_len = total_len - old_system_end
+        units_cache = self._slice_cache(old_system_end, total_len) if units_len > 0 else None
+
+        embed_parts = []
+        if new_prefix_token_ids:
+            embed_parts.append(self.embed_tokens(new_prefix_token_ids))
+
+        ref_audio_len = 0
+        if new_ref_audio_embeds is not None:
+            if new_ref_audio_embeds.dim() == 3 and new_ref_audio_embeds.shape[0] == 1:
+                new_ref_audio_embeds = new_ref_audio_embeds.squeeze(0)
+            if new_ref_audio_embeds.numel() > 0:
+                ref_audio_len = new_ref_audio_embeds.shape[0]
+                embed_parts.append(new_ref_audio_embeds.to(device=self.m.device))
+
+        previous_token_ids = list(self._previous_token_ids)
+        if previous_token_ids:
+            embed_parts.append(self.embed_tokens(previous_token_ids))
+        if new_suffix_token_ids:
+            embed_parts.append(self.embed_tokens(new_suffix_token_ids))
+
+        new_system_len = (
+            len(new_prefix_token_ids)
+            + ref_audio_len
+            + len(previous_token_ids)
+            + len(new_suffix_token_ids)
+        )
+
+        new_system_cache = None
+        if embed_parts:
+            system_embeds = torch.cat(embed_parts, dim=0)
+            device = system_embeds.device
+            position_ids = torch.arange(0, new_system_len, device=device).unsqueeze(0)
+            outputs = self.m(
+                inputs_embeds=system_embeds.unsqueeze(0),
+                position_ids=position_ids,
+                past_key_values=None,
+                use_cache=True,
+                return_dict=True,
+            )
+            new_system_cache = outputs.past_key_values
+
+        if units_cache is not None and self._get_cache_len(units_cache) > 0:
+            if old_system_end != new_system_len:
+                units_cache = self._reindex_rope_for_cache(
+                    units_cache,
+                    old_start=old_system_end,
+                    new_start=new_system_len,
+                    length=units_len,
+                )
+            self.cache = self._concat_caches(new_system_cache, units_cache)
+        else:
+            self.cache = new_system_cache
+
+        self._preserve_prefix_length = len(new_prefix_token_ids) + ref_audio_len
+        self._previous_content_length = len(previous_token_ids)
+        self._suffix_token_ids = list(new_suffix_token_ids)
+        self._system_preserve_length = new_system_len
+        self._position_offset = 0
+
+        logger.info(
+            "Updated duplex system prompt cache: old_system=%d, new_system=%d, units=%d",
+            old_system_end,
+            new_system_len,
+            units_len,
+        )
+        return True
+
     def _extract_generated_text(self, units: List[Dict[str, Any]]) -> Tuple[str, List[int]]:
         """extract generated text and token ids from units
 
