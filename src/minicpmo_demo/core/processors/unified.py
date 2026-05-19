@@ -115,6 +115,7 @@ import torch
 
 from minicpmo_demo.core.capabilities import ProcessorMode
 from minicpmo_demo.core.processors.base import BaseProcessor, MiniCPMOProcessorMixin
+from minicpmo_demo.core.tool_calls import build_tool_instruction_block, parse_tool_calls
 from minicpmo_demo.core.schemas import (
     # Chat
     ChatRequest, ChatResponse,
@@ -388,6 +389,7 @@ class ChatView(MiniCPMOProcessorMixin):
                 output_audio_path=output_audio_path,
                 tts_sampling_params=tts_sampling_params,
                 tts_ref_audio=tts_ref_audio,
+                tools=request.tools,
                 # 高级参数
                 omni_mode=request.omni_mode if hasattr(request, 'omni_mode') else False,
                 enable_thinking=request.enable_thinking if hasattr(request, 'enable_thinking') else False,
@@ -422,6 +424,8 @@ class ChatView(MiniCPMOProcessorMixin):
                     text_content = result[0]
         else:
             text_content = result
+
+        text_content, tool_calls = parse_tool_calls(text_content or "")
         
         # 将 waveform numpy array 转为 base64 WAV
         audio_base64 = None
@@ -457,6 +461,7 @@ class ChatView(MiniCPMOProcessorMixin):
                 "generated_tokens": generated_tokens,
                 "total_tokens": input_tokens + generated_tokens,
             },
+            tool_calls=tool_calls or None,
         )
 
 
@@ -540,6 +545,12 @@ class HalfDuplexView(MiniCPMOProcessorMixin):
                 "role": msg.role.value,
                 "content": content
             }]
+            if msg.tool_calls:
+                msgs[0]["tool_calls"] = msg.tool_calls
+            if msg.tool_call_id:
+                msgs[0]["tool_call_id"] = msg.tool_call_id
+            if msg.name:
+                msgs[0]["name"] = msg.name
             
             # is_last_chunk 仅在最后一条消息且 request 标记为 last 时为 True
             is_last = request.is_last_chunk and (i == num_messages - 1)
@@ -552,6 +563,7 @@ class HalfDuplexView(MiniCPMOProcessorMixin):
                 max_slice_nums=max_slice,
                 use_tts_template=request.use_tts_template,
                 enable_thinking=request.enable_thinking,
+                tools=request.tools if i == 0 else None,
                 is_last_chunk=is_last,
                 stream_input=False,
             )
@@ -568,6 +580,7 @@ class HalfDuplexView(MiniCPMOProcessorMixin):
         max_slice_nums=None,
         use_tts_template: bool = True,
         enable_thinking: bool = False,
+        tools=None,
     ) -> str:
         """非流式预填充：一次性 prefill 所有消息到 KV cache"""
         prompt = self._model.non_streaming_prefill(
@@ -577,6 +590,7 @@ class HalfDuplexView(MiniCPMOProcessorMixin):
             max_slice_nums=max_slice_nums,
             use_tts_template=use_tts_template,
             enable_thinking=enable_thinking,
+            tools=tools,
         )
         return prompt
     
@@ -862,6 +876,7 @@ class DuplexView:
     def prepare(
         self,
         system_prompt_text: Optional[str] = None,
+        tools: Optional[List[dict]] = None,
         ref_audio_path: Optional[str] = None,
         prompt_wav_path: Optional[str] = None,
     ) -> str:
@@ -877,6 +892,9 @@ class DuplexView:
         """
         if system_prompt_text is None:
             system_prompt_text = "Streaming Omni Conversation."
+        tool_block = build_tool_instruction_block(tools)
+        if tool_block:
+            system_prompt_text = f"{system_prompt_text}\n\n{tool_block}"
         
         prefix_system_prompt = f"<|im_start|>system\n{system_prompt_text}\n<|audio_start|>"
         suffix_system_prompt = "<|audio_end|><|im_end|>"

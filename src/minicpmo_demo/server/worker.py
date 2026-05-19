@@ -326,6 +326,7 @@ class MiniCPMOWorker:
         max_slice_nums=None,
         use_tts_template: bool = False,
         enable_thinking: bool = False,
+        tools=None,
     ) -> str:
         """Chat prefill：一次性 prefill 所有消息到 KV cache"""
         chat_view = self.processor.set_chat_mode()
@@ -336,6 +337,7 @@ class MiniCPMOWorker:
             max_slice_nums=max_slice_nums,
             use_tts_template=use_tts_template,
             enable_thinking=enable_thinking,
+            tools=tools,
         )
         return prompt
 
@@ -450,6 +452,7 @@ class MiniCPMOWorker:
     def duplex_prepare(
         self,
         system_prompt_text: Optional[str] = None,
+        tools: Optional[List[dict]] = None,
         ref_audio_path: Optional[str] = None,
         prompt_wav_path: Optional[str] = None,
     ) -> str:
@@ -464,6 +467,7 @@ class MiniCPMOWorker:
         duplex_view = self.processor.set_duplex_mode()
         return duplex_view.prepare(
             system_prompt_text=system_prompt_text,
+            tools=tools,
             ref_audio_path=ref_audio_path or self.ref_audio_path,
             prompt_wav_path=prompt_wav_path,
         )
@@ -694,7 +698,13 @@ def _parse_raw_messages(raw_messages: List[dict]) -> List[Message]:
     messages: List[Message] = []
     for m in raw_messages:
         role = Role(m["role"])
-        content = m["content"]
+        content = m.get("content")
+        extra = {
+            "tool_calls": m.get("tool_calls"),
+            "tool_call_id": m.get("tool_call_id"),
+            "name": m.get("name"),
+        }
+        extra = {k: v for k, v in extra.items() if v is not None}
         if isinstance(content, list):
             content_items: List[ContentItem] = []
             for item in content:
@@ -711,9 +721,9 @@ def _parse_raw_messages(raw_messages: List[dict]) -> List[Message]:
                             stack_frames=item.get("stack_frames", 1),
                         ))
             if content_items:
-                messages.append(Message(role=role, content=content_items))
+                messages.append(Message(role=role, content=content_items, **extra))
         else:
-            messages.append(Message(role=role, content=content))
+            messages.append(Message(role=role, content=content, **extra))
     return messages
 
 
@@ -726,7 +736,14 @@ def _convert_to_model_msgs(schema_messages: List[Message]) -> list:
         content = _mixin._convert_content_to_model_format(m.content)
         if len(content) == 1 and isinstance(content[0], str):
             content = content[0]
-        model_msgs.append({"role": m.role.value, "content": content})
+        model_msg = {"role": m.role.value, "content": content}
+        if m.tool_calls:
+            model_msg["tool_calls"] = m.tool_calls
+        if m.tool_call_id:
+            model_msg["tool_call_id"] = m.tool_call_id
+        if m.name:
+            model_msg["name"] = m.name
+        model_msgs.append(model_msg)
     return model_msgs
 
 
@@ -845,6 +862,7 @@ async def chat_ws(ws: WebSocket):
                     max_slice_nums=max_slice_nums,
                     use_tts_template=use_tts_template,
                     enable_thinking=enable_thinking,
+                    tools=msg.get("tools"),
                 )
 
             await asyncio.to_thread(_do_prefill)
@@ -1538,6 +1556,7 @@ async def duplex_ws(ws: WebSocket):
                     prompt = await asyncio.to_thread(
                         worker.duplex_prepare,
                         system_prompt_text=system_prompt,
+                        tools=msg.get("tools"),
                         ref_audio_path=actual_ref_audio_path,
                         prompt_wav_path=actual_tts_audio_path,
                     )
@@ -1549,6 +1568,7 @@ async def duplex_ws(ws: WebSocket):
                     if cfg.recording.enabled:
                         config_snap = {
                             "system_prompt": system_prompt,
+                            "tools": msg.get("tools"),
                             "ref_audio": actual_ref_audio_path or cfg.ref_audio_path,
                             "deferred_finalize": use_deferred_finalize,
                             "max_slice_nums": session_max_slice_nums,
