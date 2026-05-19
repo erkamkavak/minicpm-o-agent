@@ -7,7 +7,7 @@ import os
 import tempfile
 from copy import deepcopy
 from threading import Thread
-from typing import Optional
+from typing import Dict, List, Optional
 
 import numpy as np
 import soundfile as sf
@@ -312,6 +312,7 @@ class ChatGenerationMixin:
         tts_sampling_params: TTSSamplingParams = TTSSamplingParams(),
         merge_audio_from_same_content=True,
         tts_ref_audio: Optional[np.ndarray] = None,
+        tools: Optional[List[Dict]] = None,
         **kwargs,
     ):
         # todo: deprecated
@@ -355,8 +356,8 @@ class ChatGenerationMixin:
             audio_parts = []
             for i, msg in enumerate(copy_msgs):
                 role = msg["role"]
-                content = msg["content"]
-                assert role in ["system", "user", "assistant"]
+                content = msg.get("content") or ""
+                assert role in ["system", "user", "assistant", "tool"]
                 if i == 0:
                     assert role in ["user", "system"], "The role of first msg should be user"
                 if isinstance(content, str):
@@ -386,6 +387,7 @@ class ChatGenerationMixin:
                     add_generation_prompt=False if teacher_forcing else True,
                     use_tts_template=use_tts_template,
                     enable_thinking=enable_thinking,
+                    tools=tools,
                 )
             )
             input_images_list.append(images)

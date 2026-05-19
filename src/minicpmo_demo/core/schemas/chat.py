@@ -168,6 +168,10 @@ class ChatRequest(BaseModel):
         min_length=1, 
         description="对话消息列表（至少包含一条用户消息）"
     )
+    tools: Optional[List[Dict]] = Field(
+        None,
+        description="可供模型调用的工具/函数定义，会通过 tokenizer chat template 注入 system prompt",
+    )
     generation: GenerationConfig = Field(
         default_factory=GenerationConfig, 
         description="生成参数配置"
@@ -294,6 +298,10 @@ class ChatResponse(BaseModel):
             "generated_tokens（生成）、total_tokens（最终 KV cache 长度）。"
             "Chat 模式下 cached_tokens 始终为 0。"
         ),
+    )
+    tool_calls: Optional[List[Dict]] = Field(
+        None,
+        description="从模型输出中解析出的工具调用",
     )
     
     # 录制

@@ -293,6 +293,8 @@ class MiniCPMOProcessorMixin:
         import tempfile
         import os
         
+        if content is None:
+            return [""]
         if isinstance(content, str):
             return [content]
         
@@ -379,10 +381,17 @@ class MiniCPMOProcessorMixin:
             # 如果只有一个文本元素，简化为字符串
             if len(content) == 1 and isinstance(content[0], str):
                 content = content[0]
-            result.append({
+            model_msg = {
                 "role": msg.role.value,
-                "content": content
-            })
+                "content": content,
+            }
+            if getattr(msg, "tool_calls", None):
+                model_msg["tool_calls"] = msg.tool_calls
+            if getattr(msg, "tool_call_id", None):
+                model_msg["tool_call_id"] = msg.tool_call_id
+            if getattr(msg, "name", None):
+                model_msg["name"] = msg.name
+            result.append(model_msg)
         
         return result
     

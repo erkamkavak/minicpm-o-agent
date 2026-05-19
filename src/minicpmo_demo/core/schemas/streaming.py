@@ -157,7 +157,7 @@ for chunk in processor.streaming_generate(
 - 采样率固定 24000 Hz（与单工模式一致）
 """
 
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -292,6 +292,10 @@ class StreamingRequest(BaseModel):
         ..., 
         min_length=1, 
         description="消息列表（单次预填充通常只有一条）"
+    )
+    tools: Optional[List[Dict]] = Field(
+        None,
+        description="可供模型调用的工具/函数定义，会通过 tokenizer chat template 注入 system prompt",
     )
     is_last_chunk: bool = Field(
         False, 

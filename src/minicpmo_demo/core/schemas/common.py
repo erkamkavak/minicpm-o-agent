@@ -74,7 +74,7 @@ tts = TTSConfig(
 """
 
 from enum import Enum
-from typing import List, Optional, Union, Literal
+from typing import Dict, List, Optional, Union, Literal
 import base64
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -110,6 +110,7 @@ class Role(str, Enum):
     SYSTEM = "system"
     USER = "user"
     ASSISTANT = "assistant"
+    TOOL = "tool"
 
 
 class TTSMode(str, Enum):
@@ -366,9 +367,21 @@ class Message(BaseModel):
         - 最后一条消息通常是 USER（等待模型回复）
     """
     role: Role = Field(..., description="消息角色")
-    content: Union[str, List[ContentItem]] = Field(
-        ..., 
+    content: Union[str, List[ContentItem], None] = Field(
+        None,
         description="消息内容（字符串或多模态列表）"
+    )
+    tool_calls: Optional[List[Dict]] = Field(
+        None,
+        description="助手消息中模型发出的工具调用列表",
+    )
+    tool_call_id: Optional[str] = Field(
+        None,
+        description="工具响应消息对应的 tool call ID",
+    )
+    name: Optional[str] = Field(
+        None,
+        description="工具响应消息的工具名称",
     )
     
     @field_validator("content", mode="before")

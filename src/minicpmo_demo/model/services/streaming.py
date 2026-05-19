@@ -3,6 +3,7 @@
 import json
 import logging
 from copy import deepcopy
+from typing import Dict, List, Optional
 
 import numpy as np
 import torch
@@ -36,6 +37,7 @@ class StreamingGenerationMixin:
         stream_input=False,
         max_inp_length=8192,
         merge_audio_from_same_content=True,
+        tools: Optional[List[Dict]] = None,
     ):
         """一次性 prefill 所有消息到 KV cache（非流式，复用 chat 的消息解析逻辑）
 
@@ -83,8 +85,8 @@ class StreamingGenerationMixin:
         audio_parts = []
         for i, msg in enumerate(copy_msgs):
             role = msg["role"]
-            content = msg["content"]
-            assert role in ["system", "user", "assistant"]
+            content = msg.get("content") or ""
+            assert role in ["system", "user", "assistant", "tool"]
             if i == 0:
                 assert role in ["user", "system"], "The role of first msg should be user"
             if isinstance(content, str):
@@ -113,6 +115,7 @@ class StreamingGenerationMixin:
             add_generation_prompt=False,
             use_tts_template=use_tts_template,
             enable_thinking=enable_thinking,
+            tools=tools,
         )
 
         if not merge_audio_from_same_content:
@@ -398,6 +401,7 @@ class StreamingGenerationMixin:
         enable_thinking=False,
         is_last_chunk=False,  # for audio chunk, if is the last chunk, set to True
         stream_input=None,  # None=auto (is_not_system_prefill), False=完整音频, True=实时流式音频(双工)
+        tools: Optional[List[Dict]] = None,
         **kwargs,
     ):
         assert session_id is not None, "session_id cannot be None"
@@ -413,10 +417,10 @@ class StreamingGenerationMixin:
         copy_msgs = deepcopy(msgs)
         msg = copy_msgs[0]
 
-        assert msg["role"] in ["system", "user", "assistant"]
+        assert msg["role"] in ["system", "user", "assistant", "tool"]
         is_not_system_prefill = msg["role"] != "system"
 
-        content = msg["content"]
+        content = msg.get("content") or ""
         cur_msgs = []
         for j, c in enumerate(content):
             if isinstance(c, Image.Image):
@@ -456,6 +460,7 @@ class StreamingGenerationMixin:
                     add_generation_prompt=False,
                     use_tts_template=use_tts_template,
                     enable_thinking=enable_thinking,
+                    tools=tools,
                 )
             add_special_tokens = True  # add bos
         else:
@@ -901,4 +906,3 @@ class StreamingGenerationMixin:
             )
 
     # Duplex convenience methods are provided by DuplexProxyMixin.
-
