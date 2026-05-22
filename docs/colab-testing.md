@@ -25,6 +25,11 @@ These tests verify:
 If local `torch` is not installed, `tests/test_duplex_system_prompt_update.py` is skipped.
 That is expected on low-storage machines; run it in Colab for the cache-level check.
 
+For a step-by-step executable explanation of KV-cache surgery, open
+`docs/colab-kv-cache-walkthrough.ipynb` in Colab. It starts with visible toy
+tensors and then runs the repo's real `StreamDecoder.update_system_prompt()`
+path with a fake LLM.
+
 ## Getting Changes Into Colab
 
 Recommended workflow:
