@@ -1,0 +1,15 @@
+MiniCPM-o Agent
+
+This repository is derived from OpenBMB MiniCPM-o / MiniCPM-o 4.5 assets and
+code, with modifications focused on a backend/model inference service, package
+structure cleanup, tool-call plumbing, and duplex system-prompt cache updates.
+
+Upstream project:
+https://github.com/OpenBMB/MiniCPM-o
+
+Model card and model assets:
+https://huggingface.co/openbmb/MiniCPM-o-4_5
+
+The upstream MiniCPM-o/V model weights and code are described by OpenBMB as
+open-sourced under the Apache-2.0 license. This repository preserves upstream
+copyright/license headers where present.

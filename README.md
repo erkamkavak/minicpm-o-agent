@@ -1,6 +1,15 @@
 # MiniCPM-o 4.5 Backend Service
 
-This repository is a backend/model-focused MiniCPM-o 4.5 inference service. It keeps the PyTorch model code, worker/gateway APIs, model assets, presets, protocol examples, tests, and backend design notes. Browser, mobile, static demo, and generated docs-site assets have been removed.
+This repository is derived from [OpenBMB MiniCPM-o](https://github.com/OpenBMB/MiniCPM-o)
+and [openbmb/MiniCPM-o-4_5](https://huggingface.co/openbmb/MiniCPM-o-4_5).
+It has been refactored into a backend/model-focused MiniCPM-o 4.5 inference
+service. It keeps the PyTorch model code, worker/gateway APIs, model assets,
+presets, protocol examples, tests, and backend design notes. Browser, mobile,
+static demo, and generated docs-site assets have been removed.
+
+OpenBMB describes the MiniCPM-o/V code and model weights as open-sourced under
+the Apache-2.0 license. This repository keeps upstream copyright/license
+headers where present and adds local changes under the same license.
 
 ## What Is Included
 
@@ -46,6 +55,8 @@ CUDA_VISIBLE_DEVICES=0 bash start_all.sh
 ```
 
 The gateway defaults to `https://localhost:8006`. Use `bash start_all.sh --http` for local HTTP mode.
+For HTTPS, `start_all.sh` generates local self-signed certificates under
+`certs/` when they are missing. These local certificates are ignored by git.
 
 Direct module entry points use the package under `src`:
 

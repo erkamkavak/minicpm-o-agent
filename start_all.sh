@@ -51,6 +51,17 @@ echo "=================================================="
 cd "$PROJECT_DIR"
 mkdir -p tmp
 
+if [ "$GATEWAY_PROTO" = "https" ] && { [ ! -f certs/cert.pem ] || [ ! -f certs/key.pem ]; }; then
+    echo "[Gateway] TLS certs not found; generating local self-signed certs in certs/"
+    mkdir -p certs
+    openssl req -x509 -newkey rsa:2048 \
+        -keyout certs/key.pem \
+        -out certs/cert.pem \
+        -days 365 -nodes \
+        -subj "/CN=minicpm-o-demo" \
+        2>/dev/null
+fi
+
 # ============ 启动 Workers ============
 WORKER_ADDRS=""
 GPU_IDX=0
