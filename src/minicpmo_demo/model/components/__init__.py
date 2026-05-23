@@ -1,14 +1,12 @@
-"""Neural network building blocks used by the MiniCPM-o model wrappers."""
+"""Neural network building blocks used by the MiniCPM-o model wrappers.
 
-from .audio_encoder import MiniCPMWhisperEncoder, MiniCPMWhisperEncoderLayer
-from .generation import prepare_inputs_for_generation
-from .tts import MiniCPMMLP
-from .tts import MiniCPMTTS
-from .tts import MiniCPMTTSGenerationOutput
-from .tts import MultiModalProjector
-from .tts import gen_logits
-from .tts import make_streaming_chunk_mask_inference
-from .vision import Resampler, get_2d_sincos_pos_embed
+The public component symbols are loaded lazily to avoid import cycles during
+configuration loading. In particular, ``configuration_minicpmo`` imports
+``components.vision_encoder`` for ``SiglipVisionConfig`` while ``tts`` imports
+``MiniCPMTTSConfig`` back from ``configuration_minicpmo``.
+"""
+
+from importlib import import_module
 
 __all__ = [
     "MiniCPMTTS",
@@ -23,3 +21,27 @@ __all__ = [
     "make_streaming_chunk_mask_inference",
     "prepare_inputs_for_generation",
 ]
+
+_SYMBOL_MODULES = {
+    "MiniCPMWhisperEncoder": ".audio_encoder",
+    "MiniCPMWhisperEncoderLayer": ".audio_encoder",
+    "prepare_inputs_for_generation": ".generation",
+    "MiniCPMMLP": ".tts",
+    "MiniCPMTTS": ".tts",
+    "MiniCPMTTSGenerationOutput": ".tts",
+    "MultiModalProjector": ".tts",
+    "gen_logits": ".tts",
+    "make_streaming_chunk_mask_inference": ".tts",
+    "Resampler": ".vision",
+    "get_2d_sincos_pos_embed": ".vision",
+}
+
+
+def __getattr__(name):
+    if name not in _SYMBOL_MODULES:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+    module = import_module(_SYMBOL_MODULES[name], __name__)
+    value = getattr(module, name)
+    globals()[name] = value
+    return value
