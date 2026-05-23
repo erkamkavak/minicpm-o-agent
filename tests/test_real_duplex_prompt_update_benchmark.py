@@ -217,6 +217,84 @@ def _relative_l2(a: torch.Tensor, b: torch.Tensor, eps: float = 1e-8) -> float:
     return float((a - b).norm() / (b.norm() + eps))
 
 
+def _format_metric_value(value: Any) -> str:
+    if isinstance(value, float):
+        if abs(value) >= 100:
+            return f"{value:,.1f}"
+        if abs(value) >= 1:
+            return f"{value:,.3f}"
+        return f"{value:.6g}"
+    if value is None:
+        return "-"
+    return str(value)
+
+
+def _print_metrics_table(metrics: dict[str, Any]) -> None:
+    sections = [
+        (
+            "Scenario",
+            [
+                ("mode", "input_mode"),
+                ("history units", "history_units"),
+                ("audio seconds", "audio_chunk_seconds"),
+                ("probe chars", "probe_text_chars"),
+                ("old prompt chars", "old_prompt_chars"),
+                ("new prompt chars", "new_prompt_chars"),
+            ],
+        ),
+        (
+            "Cache",
+            [
+                ("before update", "cache_len_before_update"),
+                ("after surgery", "cache_len_after_update"),
+                ("after full replay", "cache_len_after_full_replay"),
+            ],
+        ),
+        (
+            "Speed",
+            [
+                ("cache surgery ms", "cache_surgery_ms"),
+                ("full replay ms", "full_replay_ms"),
+                ("speedup", "speedup"),
+                ("surgery peak MB", "cache_surgery_peak_memory_mb"),
+                ("full replay peak MB", "full_replay_peak_memory_mb"),
+            ],
+        ),
+        (
+            "Divergence",
+            [
+                ("KL surgery->full", "kl_surgery_to_full"),
+                ("KL full->surgery", "kl_full_to_surgery"),
+                ("JS divergence", "js_divergence"),
+                ("relative L2 logits", "relative_l2_logits"),
+                ("max abs logit delta", "max_abs_logit_delta"),
+                ("top1 same", "top1_same"),
+                ("top5 overlap", "top5_overlap"),
+                ("top10 overlap", "top10_overlap"),
+            ],
+        ),
+    ]
+
+    rows = []
+    for section, items in sections:
+        rows.append((section, "", ""))
+        for label, key in items:
+            rows.append(("", label, _format_metric_value(metrics.get(key))))
+
+    col1 = max(len(row[0]) for row in rows)
+    col2 = max(len(row[1]) for row in rows)
+    col3 = max(len(row[2]) for row in rows)
+    sep = f"+-{'-' * col1}-+-{'-' * col2}-+-{'-' * col3}-+"
+
+    print("\n[duplex prompt update benchmark table]")
+    print(sep)
+    print(f"| {'section'.ljust(col1)} | {'metric'.ljust(col2)} | {'value'.ljust(col3)} |")
+    print(sep)
+    for section, metric, value in rows:
+        print(f"| {section.ljust(col1)} | {metric.ljust(col2)} | {value.rjust(col3)} |")
+    print(sep)
+
+
 def test_real_duplex_prompt_update_speed_and_divergence() -> None:
     _require_real_bench_enabled()
 
@@ -345,6 +423,7 @@ def test_real_duplex_prompt_update_speed_and_divergence() -> None:
 
     print("\n[duplex prompt update benchmark]")
     print(json.dumps(metrics, indent=2, ensure_ascii=False))
+    _print_metrics_table(metrics)
 
     assert metrics["cache_len_before_update"] > 0
     assert metrics["cache_surgery_ms"] > 0
