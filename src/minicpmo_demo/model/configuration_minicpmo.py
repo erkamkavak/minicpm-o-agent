@@ -114,6 +114,9 @@ class MiniCPMTTSConfig(PretrainedConfig):
         attention_type: str = "sliding_recompute",
         recomputed_chunks: int = 1,
         window_size: int = 2,
+        top_p: float = 0.95,
+        top_k: int = 20,
+        repetition_penalty: float = 1.0,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -172,6 +175,9 @@ class MiniCPMTTSConfig(PretrainedConfig):
         self.attention_type = attention_type
         self.recomputed_chunks = recomputed_chunks
         self.window_size = window_size
+        self.top_p = top_p
+        self.top_k = top_k
+        self.repetition_penalty = repetition_penalty
 
 
 class MiniCPMOConfig(Qwen3Config):
