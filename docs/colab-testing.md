@@ -97,6 +97,34 @@ Then run the existing duplex tests:
 CUDA_VISIBLE_DEVICES=0 PYTHONPATH=src pytest -q tests/test_duplex.py -s
 ```
 
+## Run Real Prompt-Update Benchmark
+
+This benchmark compares the mid-session system-prompt cache update against a
+full replay under the new prompt. It measures update/replay latency and compares
+the next probe logits with KL/JS divergence and top-k overlap.
+
+```bash
+CUDA_VISIBLE_DEVICES=0 \
+MINICPMO45_RUN_REAL_PROMPT_UPDATE_BENCH=1 \
+MINICPMO45_MODEL_PATH=/content/path/to/MiniCPM-o-4_5 \
+MINICPMO45_PT_PATH=/content/path/to/model.pt \
+MINICPMO45_REF_AUDIO_PATH=/content/minicpm-o-agent/tests/cases/common/ref_audio/BH-Ref-HT-F224-Ref06_82_U001_话题_3_348s-355s.wav \
+MINICPMO45_HISTORY_UNITS=10 \
+MINICPMO45_AUDIO_CHUNK_SECONDS=1.0 \
+PYTHONPATH=src python -m pytest -q tests/test_real_duplex_prompt_update_benchmark.py -s
+```
+
+`MINICPMO45_PT_PATH` is optional. By default the benchmark repeats
+`tests/cases/common/user_audio/000_user_audio0.wav` for the configured number
+of history units. To use specific history clips instead:
+
+```bash
+export MINICPMO45_HISTORY_AUDIO_PATHS=/content/a.wav,/content/b.wav,/content/c.wav
+```
+
+The benchmark writes JSON metrics to
+`tests/results/duplex_prompt_update_benchmark.json`.
+
 For the new mid-session update behavior, run or adapt a small script:
 
 ```python
