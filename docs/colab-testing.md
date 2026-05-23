@@ -125,6 +125,25 @@ export MINICPMO45_HISTORY_AUDIO_PATHS=/content/a.wav,/content/b.wav,/content/c.w
 The benchmark writes JSON metrics to
 `tests/results/duplex_prompt_update_benchmark.json`.
 
+To run the same benchmark with text-only history instead of audio units:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 \
+MINICPMO45_RUN_REAL_PROMPT_UPDATE_BENCH=1 \
+MINICPMO45_BENCH_INPUT_MODE=text \
+MINICPMO45_MODEL_PATH=/content/path/to/MiniCPM-o-4_5 \
+MINICPMO45_REF_AUDIO_PATH=/content/minicpm-o-agent/tests/cases/common/ref_audio/BH-Ref-HT-F224-Ref06_82_U001_话题_3_348s-355s.wav \
+MINICPMO45_HISTORY_UNITS=30 \
+MINICPMO45_PROBE_TEXT="Given the previous messages, what should you remember?" \
+PYTHONPATH=src python -m pytest -q tests/test_real_duplex_prompt_update_benchmark.py -s
+```
+
+For custom text turns, separate messages with `||`:
+
+```bash
+export MINICPMO45_HISTORY_TEXTS="Hello, remember alpha.||Now remember beta.||What did I say earlier?"
+```
+
 For the new mid-session update behavior, run or adapt a small script:
 
 ```python

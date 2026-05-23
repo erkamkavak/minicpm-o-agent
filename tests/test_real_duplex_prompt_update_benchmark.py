@@ -112,6 +112,23 @@ def _history_audio_paths() -> list[Path]:
     return [default_audio] * unit_count
 
 
+def _history_texts() -> list[str]:
+    raw = os.environ.get("MINICPMO45_HISTORY_TEXTS")
+    if raw:
+        raw = raw.strip()
+        if raw.startswith("["):
+            values = json.loads(raw)
+            assert isinstance(values, list)
+            return [str(value) for value in values]
+        return [item.strip() for item in raw.split("||") if item.strip()]
+
+    unit_count = int(os.environ.get("MINICPMO45_HISTORY_UNITS", "3"))
+    return [
+        f"User message {idx + 1}: remember project detail {idx + 1} and keep replies concise."
+        for idx in range(unit_count)
+    ]
+
+
 def _replay_history(duplex, audio_chunks: list[np.ndarray]) -> None:
     for idx, audio in enumerate(audio_chunks):
         prefill = duplex.prefill(audio_waveform=audio)
@@ -123,6 +140,33 @@ def _replay_history(duplex, audio_chunks: list[np.ndarray]) -> None:
         duplex.finalize()
 
 
+def _feed_text_unit(duplex, text: str) -> None:
+    capability = duplex._model.duplex
+    decoder = capability.decoder
+    tokenizer = capability.tokenizer
+
+    token_ids = tokenizer.encode(text, add_special_tokens=False)
+    unit_end_id = tokenizer.convert_tokens_to_ids("</unit>")
+
+    decoder.register_unit_start()
+    decoder.feed(decoder.embed_token(capability.unit_token_id))
+    if token_ids:
+        decoder.feed(decoder.embed_tokens(token_ids))
+    decoder.feed(decoder.embed_token(capability.listen_token_id))
+    decoder.feed(decoder.embed_token(unit_end_id))
+    decoder.register_unit_end(
+        input_type="text",
+        generated_tokens=[capability.listen_token_id],
+        is_listen=True,
+        generated_text="",
+    )
+
+
+def _replay_text_history(duplex, history_texts: list[str]) -> None:
+    for text in history_texts:
+        _feed_text_unit(duplex, text)
+
+
 def _capture_probe_logits(duplex, probe_audio: np.ndarray) -> torch.Tensor:
     prefill = duplex.prefill(audio_waveform=probe_audio)
     assert prefill.get("success"), f"probe prefill failed: {prefill}"
@@ -131,6 +175,22 @@ def _capture_probe_logits(duplex, probe_audio: np.ndarray) -> torch.Tensor:
     assert pending_logits is not None, "probe did not produce pending logits"
     assert torch.isfinite(pending_logits).all(), "probe logits contain non-finite values"
     return pending_logits.detach().float().cpu()
+
+
+def _capture_text_probe_logits(duplex, probe_text: str) -> torch.Tensor:
+    capability = duplex._model.duplex
+    decoder = capability.decoder
+    token_ids = capability.tokenizer.encode(probe_text, add_special_tokens=False)
+
+    decoder.register_unit_start()
+    decoder.feed(decoder.embed_token(capability.unit_token_id))
+    if token_ids:
+        logits, _ = decoder.feed(decoder.embed_tokens(token_ids), return_logits=True)
+    else:
+        logits, _ = decoder.feed(decoder.embed_token(capability.listen_token_id), return_logits=True)
+
+    assert torch.isfinite(logits).all(), "probe logits contain non-finite values"
+    return logits.detach().float().cpu()
 
 
 def _kl_from_logits(logits_a: torch.Tensor, logits_b: torch.Tensor, eps: float = 1e-8) -> float:
@@ -188,12 +248,20 @@ def test_real_duplex_prompt_update_speed_and_divergence() -> None:
         "Streaming Duplex Conversation! You are a concise helpful assistant. "
         "When relevant, mention that tools may be available.",
     )
+    input_mode = os.environ.get("MINICPMO45_BENCH_INPUT_MODE", "audio").lower()
+    assert input_mode in {"audio", "text"}
     audio_seconds = float(os.environ.get("MINICPMO45_AUDIO_CHUNK_SECONDS", "1.0"))
     result_path = Path(os.environ.get("MINICPMO45_BENCH_RESULT_PATH", str(DEFAULT_RESULT_PATH)))
 
-    history_paths = _history_audio_paths()
-    history_chunks = [_load_audio(path, audio_seconds) for path in history_paths]
-    probe_audio = _load_audio(probe_audio_path, audio_seconds)
+    if input_mode == "audio":
+        history_items = [_load_audio(path, audio_seconds) for path in _history_audio_paths()]
+        probe_item = _load_audio(probe_audio_path, audio_seconds)
+    else:
+        history_items = _history_texts()
+        probe_item = os.environ.get(
+            "MINICPMO45_PROBE_TEXT",
+            "Given the previous messages, what should you remember?",
+        )
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     processor = UnifiedProcessor(
@@ -211,7 +279,10 @@ def test_real_duplex_prompt_update_speed_and_divergence() -> None:
 
     # Path A: build old state, then update prompt in-place.
     duplex.prepare(system_prompt_text=old_prompt, ref_audio_path=str(ref_audio_path))
-    _replay_history(duplex, history_chunks)
+    if input_mode == "audio":
+        _replay_history(duplex, history_items)
+    else:
+        _replay_text_history(duplex, history_items)
     cache_len_before_update = int(processor.kv_cache_length)
 
     update_ok, cache_surgery_ms, cache_surgery_peak_mb = _time_ms(
@@ -219,23 +290,36 @@ def test_real_duplex_prompt_update_speed_and_divergence() -> None:
     )
     assert update_ok is True
     cache_len_after_update = int(processor.kv_cache_length)
-    surgery_logits = _capture_probe_logits(duplex, probe_audio)
+    surgery_logits = (
+        _capture_probe_logits(duplex, probe_item)
+        if input_mode == "audio"
+        else _capture_text_probe_logits(duplex, probe_item)
+    )
 
     # Path B: reset and replay the same raw history under the new prompt.
     def _full_replay_path() -> None:
         duplex.prepare(system_prompt_text=new_prompt, ref_audio_path=str(ref_audio_path))
-        _replay_history(duplex, history_chunks)
+        if input_mode == "audio":
+            _replay_history(duplex, history_items)
+        else:
+            _replay_text_history(duplex, history_items)
 
     _, full_replay_ms, full_replay_peak_mb = _time_ms(_full_replay_path)
     cache_len_after_full_replay = int(processor.kv_cache_length)
-    full_replay_logits = _capture_probe_logits(duplex, probe_audio)
+    full_replay_logits = (
+        _capture_probe_logits(duplex, probe_item)
+        if input_mode == "audio"
+        else _capture_text_probe_logits(duplex, probe_item)
+    )
 
     metrics = {
         "model_path": str(model_path),
         "pt_path": str(pt_path) if pt_path else None,
         "device": device,
-        "history_units": len(history_chunks),
-        "audio_chunk_seconds": audio_seconds,
+        "input_mode": input_mode,
+        "history_units": len(history_items),
+        "audio_chunk_seconds": audio_seconds if input_mode == "audio" else None,
+        "probe_text_chars": len(probe_item) if input_mode == "text" else None,
         "old_prompt_chars": len(old_prompt),
         "new_prompt_chars": len(new_prompt),
         "cache_len_before_update": cache_len_before_update,

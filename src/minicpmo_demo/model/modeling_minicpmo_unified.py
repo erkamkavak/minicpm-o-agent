@@ -329,8 +329,10 @@ class MiniCPMO(
         if duplex_config:
             self._duplex_config.update(duplex_config)
 
-        # Preload TTS vocoder
-        self.init_token2wav(streaming=True)
+        # Preload TTS vocoder only when audio generation is enabled. Text/logit
+        # benchmark paths can run without the optional Token2Wav dependency.
+        if self._duplex_config.get("generate_audio", True):
+            self.init_token2wav(streaming=True)
 
         # Create DuplexCapability instance (composition pattern)
         self.duplex = DuplexCapability(
