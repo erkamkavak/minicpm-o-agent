@@ -140,6 +140,38 @@ def _recache_last_units_from_env(history_len: int) -> int:
     return min(recache_last_units, history_len)
 
 
+def _parse_recache_value(raw: str, history_len: int) -> int:
+    raw = raw.strip().lower()
+    if raw in {"all", "full"}:
+        return history_len
+    value = int(raw)
+    if value < 0:
+        raise ValueError("recache unit counts must be >= 0, all, or full")
+    return min(value, history_len)
+
+
+def _recache_sweep_from_env(history_len: int) -> list[int]:
+    raw_sweep = os.environ.get("MINICPMO45_RECACHE_LAST_UNITS_SWEEP")
+    if raw_sweep:
+        values = [
+            _parse_recache_value(item, history_len)
+            for item in raw_sweep.split(",")
+            if item.strip()
+        ]
+    elif "MINICPMO45_RECACHE_LAST_UNITS" in os.environ:
+        values = [_recache_last_units_from_env(history_len)]
+    else:
+        values = [0, 5, 15, history_len]
+
+    deduped = []
+    for value in values:
+        if value not in deduped:
+            deduped.append(value)
+    if not deduped:
+        raise ValueError("No recache sweep values configured")
+    return deduped
+
+
 def _replay_history(duplex, audio_chunks: list[np.ndarray]) -> None:
     for idx, audio in enumerate(audio_chunks):
         prefill = duplex.prefill(audio_waveform=audio)
@@ -176,6 +208,13 @@ def _feed_text_unit(duplex, text: str) -> None:
 def _replay_text_history(duplex, history_texts: list[str]) -> None:
     for text in history_texts:
         _feed_text_unit(duplex, text)
+
+
+def _replay_items(duplex, input_mode: str, history_items: list[Any]) -> None:
+    if input_mode == "audio":
+        _replay_history(duplex, history_items)
+    else:
+        _replay_text_history(duplex, history_items)
 
 
 def _drop_recent_unit_cache_for_benchmark(duplex, unit_count: int) -> int:
@@ -238,6 +277,12 @@ def _capture_text_probe_logits(duplex, probe_text: str) -> torch.Tensor:
 
     assert torch.isfinite(logits).all(), "probe logits contain non-finite values"
     return logits.detach().float().cpu()
+
+
+def _capture_probe_for_mode(duplex, input_mode: str, probe_item: Any) -> torch.Tensor:
+    if input_mode == "audio":
+        return _capture_probe_logits(duplex, probe_item)
+    return _capture_text_probe_logits(duplex, probe_item)
 
 
 def _kl_from_logits(logits_a: torch.Tensor, logits_b: torch.Tensor, eps: float = 1e-8) -> float:
@@ -344,6 +389,38 @@ def _print_metrics_table(metrics: dict[str, Any]) -> None:
     print(sep)
 
 
+def _print_sweep_table(metrics_runs: list[dict[str, Any]]) -> None:
+    columns = [
+        ("recache", "recache_last_units"),
+        ("tokens", "recache_dropped_cache_tokens"),
+        ("update ms", "update_path_ms"),
+        ("speedup", "speedup"),
+        ("JS", "js_divergence"),
+        ("KL s->f", "kl_surgery_to_full"),
+        ("top1", "top1_same"),
+        ("top5", "top5_overlap"),
+        ("top10", "top10_overlap"),
+        ("cache", "cache_len_after_update"),
+    ]
+    rows = [
+        [label for label, _ in columns],
+        *[
+            [_format_metric_value(metrics.get(key)) for _, key in columns]
+            for metrics in metrics_runs
+        ],
+    ]
+    widths = [max(len(row[idx]) for row in rows) for idx in range(len(columns))]
+    sep = "+-" + "-+-".join("-" * width for width in widths) + "-+"
+
+    print("\n[duplex prompt update sweep summary]")
+    print(sep)
+    print("| " + " | ".join(value.ljust(widths[idx]) for idx, value in enumerate(rows[0])) + " |")
+    print(sep)
+    for row in rows[1:]:
+        print("| " + " | ".join(value.rjust(widths[idx]) for idx, value in enumerate(row)) + " |")
+    print(sep)
+
+
 def test_real_duplex_prompt_update_speed_and_divergence() -> None:
     _require_real_bench_enabled()
 
@@ -389,7 +466,7 @@ def test_real_duplex_prompt_update_speed_and_divergence() -> None:
             "MINICPMO45_PROBE_TEXT",
             "Given the previous messages, what should you remember?",
         )
-    recache_last_units = _recache_last_units_from_env(len(history_items))
+    recache_sweep = _recache_sweep_from_env(len(history_items))
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     processor = UnifiedProcessor(
@@ -405,92 +482,92 @@ def test_real_duplex_prompt_update_speed_and_divergence() -> None:
     )
     duplex = processor.set_duplex_mode()
 
-    # Path A: build old state, then update prompt in-place.
-    duplex.prepare(system_prompt_text=old_prompt, ref_audio_path=str(ref_audio_path))
-    if input_mode == "audio":
-        _replay_history(duplex, history_items)
-    else:
-        _replay_text_history(duplex, history_items)
-    cache_len_before_update = int(processor.kv_cache_length)
-
-    def _update_path() -> dict[str, Any]:
-        dropped_cache_tokens = _drop_recent_unit_cache_for_benchmark(duplex, recache_last_units)
-        update_ok = duplex.update_system_prompt(system_prompt_text=new_prompt)
-        if recache_last_units:
-            tail_items = history_items[-recache_last_units:]
-            if input_mode == "audio":
-                _replay_history(duplex, tail_items)
-            else:
-                _replay_text_history(duplex, tail_items)
-        return {
-            "updated": update_ok,
-            "dropped_cache_tokens": dropped_cache_tokens,
-        }
-
-    update_result, update_path_ms, update_path_peak_mb = _time_ms(_update_path)
-    assert update_result["updated"] is True
-    cache_len_after_update = int(processor.kv_cache_length)
-    surgery_logits = (
-        _capture_probe_logits(duplex, probe_item)
-        if input_mode == "audio"
-        else _capture_text_probe_logits(duplex, probe_item)
-    )
-
-    # Path B: reset and replay the same raw history under the new prompt.
+    # Full replay is the reference. Run it once and compare every hybrid trial
+    # against the same logits.
     def _full_replay_path() -> None:
         duplex.prepare(system_prompt_text=new_prompt, ref_audio_path=str(ref_audio_path))
-        if input_mode == "audio":
-            _replay_history(duplex, history_items)
-        else:
-            _replay_text_history(duplex, history_items)
+        _replay_items(duplex, input_mode, history_items)
 
     _, full_replay_ms, full_replay_peak_mb = _time_ms(_full_replay_path)
     cache_len_after_full_replay = int(processor.kv_cache_length)
-    full_replay_logits = (
-        _capture_probe_logits(duplex, probe_item)
-        if input_mode == "audio"
-        else _capture_text_probe_logits(duplex, probe_item)
-    )
+    full_replay_logits = _capture_probe_for_mode(duplex, input_mode, probe_item)
 
-    metrics = {
-        "model_path": str(model_path),
-        "pt_path": str(pt_path) if pt_path else None,
-        "device": device,
-        "input_mode": input_mode,
-        "history_units": len(history_items),
-        "recache_last_units": recache_last_units,
-        "recache_dropped_cache_tokens": update_result["dropped_cache_tokens"],
-        "audio_chunk_seconds": audio_seconds if input_mode == "audio" else None,
-        "probe_text_chars": len(probe_item) if input_mode == "text" else None,
-        "old_prompt_chars": len(old_prompt),
-        "new_prompt_chars": len(new_prompt),
-        "cache_len_before_update": cache_len_before_update,
-        "cache_len_after_update": cache_len_after_update,
-        "cache_len_after_full_replay": cache_len_after_full_replay,
-        "update_path_ms": update_path_ms,
-        "cache_surgery_ms": update_path_ms,
-        "full_replay_ms": full_replay_ms,
-        "speedup": full_replay_ms / update_path_ms if update_path_ms else None,
-        "update_path_peak_memory_mb": update_path_peak_mb,
-        "cache_surgery_peak_memory_mb": update_path_peak_mb,
-        "full_replay_peak_memory_mb": full_replay_peak_mb,
-        "kl_surgery_to_full": _kl_from_logits(surgery_logits, full_replay_logits),
-        "kl_full_to_surgery": _kl_from_logits(full_replay_logits, surgery_logits),
-        "js_divergence": _js_from_logits(surgery_logits, full_replay_logits),
-        "relative_l2_logits": _relative_l2(surgery_logits, full_replay_logits),
-        "max_abs_logit_delta": float((surgery_logits - full_replay_logits).abs().max()),
-        "top1_same": bool(torch.argmax(surgery_logits) == torch.argmax(full_replay_logits)),
-        "top5_overlap": _topk_overlap(surgery_logits, full_replay_logits, 5),
-        "top10_overlap": _topk_overlap(surgery_logits, full_replay_logits, 10),
-    }
+    metrics_runs = []
+    for recache_last_units in recache_sweep:
+        # Build old state fresh for each hybrid trial, but reuse the loaded model.
+        duplex.prepare(system_prompt_text=old_prompt, ref_audio_path=str(ref_audio_path))
+        _replay_items(duplex, input_mode, history_items)
+        cache_len_before_update = int(processor.kv_cache_length)
+
+        def _update_path() -> dict[str, Any]:
+            dropped_cache_tokens = _drop_recent_unit_cache_for_benchmark(duplex, recache_last_units)
+            update_ok = duplex.update_system_prompt(system_prompt_text=new_prompt)
+            if recache_last_units:
+                tail_items = history_items[-recache_last_units:]
+                _replay_items(duplex, input_mode, tail_items)
+            return {
+                "updated": update_ok,
+                "dropped_cache_tokens": dropped_cache_tokens,
+            }
+
+        update_result, update_path_ms, update_path_peak_mb = _time_ms(_update_path)
+        assert update_result["updated"] is True
+        cache_len_after_update = int(processor.kv_cache_length)
+        surgery_logits = _capture_probe_for_mode(duplex, input_mode, probe_item)
+
+        metrics = {
+            "model_path": str(model_path),
+            "pt_path": str(pt_path) if pt_path else None,
+            "device": device,
+            "input_mode": input_mode,
+            "history_units": len(history_items),
+            "recache_last_units": recache_last_units,
+            "recache_dropped_cache_tokens": update_result["dropped_cache_tokens"],
+            "audio_chunk_seconds": audio_seconds if input_mode == "audio" else None,
+            "probe_text_chars": len(probe_item) if input_mode == "text" else None,
+            "old_prompt_chars": len(old_prompt),
+            "new_prompt_chars": len(new_prompt),
+            "cache_len_before_update": cache_len_before_update,
+            "cache_len_after_update": cache_len_after_update,
+            "cache_len_after_full_replay": cache_len_after_full_replay,
+            "update_path_ms": update_path_ms,
+            "cache_surgery_ms": update_path_ms,
+            "full_replay_ms": full_replay_ms,
+            "speedup": full_replay_ms / update_path_ms if update_path_ms else None,
+            "update_path_peak_memory_mb": update_path_peak_mb,
+            "cache_surgery_peak_memory_mb": update_path_peak_mb,
+            "full_replay_peak_memory_mb": full_replay_peak_mb,
+            "kl_surgery_to_full": _kl_from_logits(surgery_logits, full_replay_logits),
+            "kl_full_to_surgery": _kl_from_logits(full_replay_logits, surgery_logits),
+            "js_divergence": _js_from_logits(surgery_logits, full_replay_logits),
+            "relative_l2_logits": _relative_l2(surgery_logits, full_replay_logits),
+            "max_abs_logit_delta": float((surgery_logits - full_replay_logits).abs().max()),
+            "top1_same": bool(torch.argmax(surgery_logits) == torch.argmax(full_replay_logits)),
+            "top5_overlap": _topk_overlap(surgery_logits, full_replay_logits, 5),
+            "top10_overlap": _topk_overlap(surgery_logits, full_replay_logits, 10),
+        }
+        metrics_runs.append(metrics)
+
+        print("\n[duplex prompt update benchmark]")
+        print(json.dumps(metrics, indent=2, ensure_ascii=False))
+        _print_metrics_table(metrics)
+
+        assert metrics["cache_len_before_update"] > 0
+        assert metrics["update_path_ms"] > 0
+        assert metrics["full_replay_ms"] > 0
 
     result_path.parent.mkdir(parents=True, exist_ok=True)
-    result_path.write_text(json.dumps(metrics, indent=2, ensure_ascii=False), encoding="utf-8")
+    result_payload: Any
+    if len(metrics_runs) == 1:
+        result_payload = metrics_runs[0]
+    else:
+        result_payload = {
+            "runs": metrics_runs,
+            "sweep": recache_sweep,
+            "full_replay_ms": full_replay_ms,
+            "cache_len_after_full_replay": cache_len_after_full_replay,
+        }
+    result_path.write_text(json.dumps(result_payload, indent=2, ensure_ascii=False), encoding="utf-8")
 
-    print("\n[duplex prompt update benchmark]")
-    print(json.dumps(metrics, indent=2, ensure_ascii=False))
-    _print_metrics_table(metrics)
-
-    assert metrics["cache_len_before_update"] > 0
-    assert metrics["update_path_ms"] > 0
-    assert metrics["full_replay_ms"] > 0
+    if len(metrics_runs) > 1:
+        _print_sweep_table(metrics_runs)
