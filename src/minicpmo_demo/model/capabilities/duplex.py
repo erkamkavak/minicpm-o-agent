@@ -292,6 +292,9 @@ class DuplexCapability:
         self.decoder.reset()
 
         self.model.init_streaming_processor()
+        self._prefix_system_prompt = prefix_system_prompt
+        self._suffix_system_prompt = suffix_system_prompt
+        self._ref_audio = ref_audio
 
         if prompt_wav_path is not None and prompt_wav_path and self.generate_audio:
             self._init_token2wav_cache(prompt_wav_path)
@@ -320,10 +323,6 @@ class DuplexCapability:
                 # 初始化时布局: [prefix] [suffix] [units...]
                 # 首次滑窗后布局: [prefix] [context_previous_marker + content] [suffix] [units...]
                 # 此时先注册 prefix 长度，再 feed suffix
-                self._prefix_system_prompt = prefix_system_prompt
-                self._suffix_system_prompt = suffix_system_prompt
-                self._ref_audio = ref_audio
-
                 # 获取 suffix token ids
                 suffix_token_ids = []
                 if suffix_system_prompt:

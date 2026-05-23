@@ -1,8 +1,11 @@
 from types import SimpleNamespace
+import threading
 
+import numpy as np
 import pytest
 
 torch = pytest.importorskip("torch")
+from minicpmo_demo.model.capabilities.duplex import DuplexCapability
 from minicpmo_demo.model.runtime.stream_decoder import StreamDecoder
 
 
@@ -122,3 +125,86 @@ def test_update_system_prompt_supports_plain_protected_cache_layout():
     assert decoder._preserve_prefix_length == 1
     assert decoder._system_preserve_length == 2
     assert torch.equal(decoder.cache[0][1][:, :, 2:4, :], old_unit_values)
+
+
+class FakeDuplexDecoder:
+    def __init__(self):
+        self._window_config = SimpleNamespace(sliding_window_mode="off")
+        self.updated_ref_audio_embeds = None
+        self.feed_lengths = []
+
+    def reset(self):
+        self.feed_lengths.clear()
+
+    def embed_tokens(self, token_ids):
+        return torch.ones(len(token_ids), 4)
+
+    def feed(self, embeds):
+        self.feed_lengths.append(int(embeds.shape[0]))
+
+    def register_system_prompt(self):
+        pass
+
+    def get_cache_length(self):
+        return 1
+
+    def update_system_prompt(
+        self,
+        new_prefix_token_ids,
+        new_suffix_token_ids,
+        new_ref_audio_embeds=None,
+    ):
+        self.updated_ref_audio_embeds = new_ref_audio_embeds
+        return True
+
+
+class FakeDuplexTokenizer:
+    def encode(self, text, add_special_tokens=False):
+        return [1] * len(text)
+
+
+class FakeDuplexProcessor:
+    def __init__(self):
+        self.audio_batches = []
+
+    def process_audio(self, audio_batch):
+        self.audio_batches.append(audio_batch)
+        return audio_batch
+
+
+class FakeDuplexModel:
+    def __init__(self):
+        self.config = SimpleNamespace(audio_chunk_length=1)
+
+    def init_streaming_processor(self):
+        pass
+
+    def get_audio_embedding(self, data, chunk_length):
+        del data, chunk_length
+        return [[torch.ones(3, 4)]]
+
+
+def test_duplex_prepare_remembers_ref_audio_for_plain_window_update():
+    capability = DuplexCapability.__new__(DuplexCapability)
+    capability.break_event = threading.Event()
+    capability.session_stop_event = threading.Event()
+    capability.decoder = FakeDuplexDecoder()
+    capability.tokenizer = FakeDuplexTokenizer()
+    capability.processor = FakeDuplexProcessor()
+    capability.model = FakeDuplexModel()
+    capability.generate_audio = False
+    capability.token2wav_initialized = False
+    capability._pending_finalize = None
+
+    ref_audio = np.array([0.1, 0.2, 0.3], dtype=np.float32)
+    capability.prepare(
+        prefix_system_prompt="old",
+        suffix_system_prompt="suffix",
+        ref_audio=ref_audio,
+    )
+
+    assert capability._ref_audio is ref_audio
+    assert capability.update_system_prompt(prefix_system_prompt="new") is True
+    assert capability.processor.audio_batches[-1][0] is ref_audio
+    assert capability.decoder.updated_ref_audio_embeds is not None
+    assert capability.decoder.updated_ref_audio_embeds.shape == (3, 4)
