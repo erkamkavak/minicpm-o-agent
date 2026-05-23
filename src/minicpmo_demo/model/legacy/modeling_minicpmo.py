@@ -111,6 +111,9 @@ logger = logging.getLogger(__name__)
 
 class MiniCPMOPreTrainedModel(Qwen3PreTrainedModel):
     config_class = MiniCPMOConfig
+    # Transformers 5.x expects this mapping during load finalization. The
+    # wrapper delegates tied embedding/head behavior to the nested Qwen3 model.
+    all_tied_weights_keys = {}
 
 
 class MiniCPMO(MiniCPMOPreTrainedModel):

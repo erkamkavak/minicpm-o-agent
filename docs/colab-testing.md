@@ -70,7 +70,7 @@ If the project extras are incomplete, install the model stack used by your envir
 
 ```bash
 python -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
-python -m pip install transformers accelerate sentencepiece pillow
+python -m pip install transformers==4.51.0 accelerate sentencepiece pillow
 ```
 
 ## Run Lightweight Tests In Colab
