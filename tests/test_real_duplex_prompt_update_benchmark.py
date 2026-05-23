@@ -2,8 +2,9 @@
 
 This test is intended for Colab/GPU runs, not normal local CI. It compares:
 
-1. Cache surgery:
-   old prompt -> replay history -> update_system_prompt(new prompt) -> probe logits
+1. Cache surgery / hybrid recent replay:
+   old prompt -> replay history -> optionally drop last N units ->
+   update_system_prompt(new prompt) -> replay dropped units -> probe logits
 2. Full replay:
    new prompt -> replay same history from raw inputs -> probe logits
 
@@ -129,6 +130,16 @@ def _history_texts() -> list[str]:
     ]
 
 
+def _recache_last_units_from_env(history_len: int) -> int:
+    raw = os.environ.get("MINICPMO45_RECACHE_LAST_UNITS", "0").strip().lower()
+    if raw in {"all", "full"}:
+        return history_len
+    recache_last_units = int(raw)
+    if recache_last_units < 0:
+        raise ValueError("MINICPMO45_RECACHE_LAST_UNITS must be >= 0, all, or full")
+    return min(recache_last_units, history_len)
+
+
 def _replay_history(duplex, audio_chunks: list[np.ndarray]) -> None:
     for idx, audio in enumerate(audio_chunks):
         prefill = duplex.prefill(audio_waveform=audio)
@@ -165,6 +176,42 @@ def _feed_text_unit(duplex, text: str) -> None:
 def _replay_text_history(duplex, history_texts: list[str]) -> None:
     for text in history_texts:
         _feed_text_unit(duplex, text)
+
+
+def _drop_recent_unit_cache_for_benchmark(duplex, unit_count: int) -> int:
+    """Remove the last N completed units from decoder cache for hybrid replay tests."""
+    if unit_count <= 0:
+        return 0
+
+    decoder = duplex._model.duplex.decoder
+    if getattr(decoder, "_pending_unit_id", None) is not None:
+        raise RuntimeError("Cannot recache while a unit is pending finalize")
+
+    unit_count = min(unit_count, len(decoder._unit_history))
+    if unit_count <= 0:
+        return 0
+
+    dropped_entries = decoder._unit_history[-unit_count:]
+    dropped_cache_tokens = sum(int(entry["length"]) for entry in dropped_entries)
+    keep_len = decoder.get_cache_length() - dropped_cache_tokens
+    if keep_len < decoder._system_preserve_length:
+        raise RuntimeError(
+            "Hybrid recache would cut into the protected system prompt span: "
+            f"keep_len={keep_len}, system={decoder._system_preserve_length}"
+        )
+
+    decoder.cache = decoder._slice_cache(0, keep_len, clone=False) if keep_len > 0 else None
+    del decoder._unit_history[-unit_count:]
+    decoder._next_unit_id = (
+        int(decoder._unit_history[-1]["unit_id"]) + 1
+        if decoder._unit_history
+        else 0
+    )
+    decoder._pending_unit_id = None
+    decoder._pending_unit_start_cache_len = 0
+
+    assert decoder._verify_consistency(), "cache and unit history diverged after hybrid drop"
+    return dropped_cache_tokens
 
 
 def _capture_probe_logits(duplex, probe_audio: np.ndarray) -> torch.Tensor:
@@ -236,6 +283,7 @@ def _print_metrics_table(metrics: dict[str, Any]) -> None:
             [
                 ("mode", "input_mode"),
                 ("history units", "history_units"),
+                ("recache last units", "recache_last_units"),
                 ("audio seconds", "audio_chunk_seconds"),
                 ("probe chars", "probe_text_chars"),
                 ("old prompt chars", "old_prompt_chars"),
@@ -246,17 +294,18 @@ def _print_metrics_table(metrics: dict[str, Any]) -> None:
             "Cache",
             [
                 ("before update", "cache_len_before_update"),
-                ("after surgery", "cache_len_after_update"),
+                ("after update path", "cache_len_after_update"),
                 ("after full replay", "cache_len_after_full_replay"),
+                ("recached tokens", "recache_dropped_cache_tokens"),
             ],
         ),
         (
             "Speed",
             [
-                ("cache surgery ms", "cache_surgery_ms"),
+                ("update path ms", "update_path_ms"),
                 ("full replay ms", "full_replay_ms"),
                 ("speedup", "speedup"),
-                ("surgery peak MB", "cache_surgery_peak_memory_mb"),
+                ("update peak MB", "update_path_peak_memory_mb"),
                 ("full replay peak MB", "full_replay_peak_memory_mb"),
             ],
         ),
@@ -340,6 +389,7 @@ def test_real_duplex_prompt_update_speed_and_divergence() -> None:
             "MINICPMO45_PROBE_TEXT",
             "Given the previous messages, what should you remember?",
         )
+    recache_last_units = _recache_last_units_from_env(len(history_items))
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     processor = UnifiedProcessor(
@@ -363,10 +413,22 @@ def test_real_duplex_prompt_update_speed_and_divergence() -> None:
         _replay_text_history(duplex, history_items)
     cache_len_before_update = int(processor.kv_cache_length)
 
-    update_ok, cache_surgery_ms, cache_surgery_peak_mb = _time_ms(
-        lambda: duplex.update_system_prompt(system_prompt_text=new_prompt)
-    )
-    assert update_ok is True
+    def _update_path() -> dict[str, Any]:
+        dropped_cache_tokens = _drop_recent_unit_cache_for_benchmark(duplex, recache_last_units)
+        update_ok = duplex.update_system_prompt(system_prompt_text=new_prompt)
+        if recache_last_units:
+            tail_items = history_items[-recache_last_units:]
+            if input_mode == "audio":
+                _replay_history(duplex, tail_items)
+            else:
+                _replay_text_history(duplex, tail_items)
+        return {
+            "updated": update_ok,
+            "dropped_cache_tokens": dropped_cache_tokens,
+        }
+
+    update_result, update_path_ms, update_path_peak_mb = _time_ms(_update_path)
+    assert update_result["updated"] is True
     cache_len_after_update = int(processor.kv_cache_length)
     surgery_logits = (
         _capture_probe_logits(duplex, probe_item)
@@ -396,6 +458,8 @@ def test_real_duplex_prompt_update_speed_and_divergence() -> None:
         "device": device,
         "input_mode": input_mode,
         "history_units": len(history_items),
+        "recache_last_units": recache_last_units,
+        "recache_dropped_cache_tokens": update_result["dropped_cache_tokens"],
         "audio_chunk_seconds": audio_seconds if input_mode == "audio" else None,
         "probe_text_chars": len(probe_item) if input_mode == "text" else None,
         "old_prompt_chars": len(old_prompt),
@@ -403,10 +467,12 @@ def test_real_duplex_prompt_update_speed_and_divergence() -> None:
         "cache_len_before_update": cache_len_before_update,
         "cache_len_after_update": cache_len_after_update,
         "cache_len_after_full_replay": cache_len_after_full_replay,
-        "cache_surgery_ms": cache_surgery_ms,
+        "update_path_ms": update_path_ms,
+        "cache_surgery_ms": update_path_ms,
         "full_replay_ms": full_replay_ms,
-        "speedup": full_replay_ms / cache_surgery_ms if cache_surgery_ms else None,
-        "cache_surgery_peak_memory_mb": cache_surgery_peak_mb,
+        "speedup": full_replay_ms / update_path_ms if update_path_ms else None,
+        "update_path_peak_memory_mb": update_path_peak_mb,
+        "cache_surgery_peak_memory_mb": update_path_peak_mb,
         "full_replay_peak_memory_mb": full_replay_peak_mb,
         "kl_surgery_to_full": _kl_from_logits(surgery_logits, full_replay_logits),
         "kl_full_to_surgery": _kl_from_logits(full_replay_logits, surgery_logits),
@@ -426,5 +492,5 @@ def test_real_duplex_prompt_update_speed_and_divergence() -> None:
     _print_metrics_table(metrics)
 
     assert metrics["cache_len_before_update"] > 0
-    assert metrics["cache_surgery_ms"] > 0
+    assert metrics["update_path_ms"] > 0
     assert metrics["full_replay_ms"] > 0

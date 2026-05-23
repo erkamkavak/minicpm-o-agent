@@ -125,6 +125,44 @@ export MINICPMO45_HISTORY_AUDIO_PATHS=/content/a.wav,/content/b.wav,/content/c.w
 The benchmark writes JSON metrics to
 `tests/results/duplex_prompt_update_benchmark.json`.
 
+To test the hybrid recent-replay tradeoff, set
+`MINICPMO45_RECACHE_LAST_UNITS`. A value of `0` is pure cache surgery. A value
+such as `3`, `5`, or `10` drops that many most recent completed units from the
+cache, updates the system prompt, and replays only those raw units under the new
+prompt before measuring the probe logits. `all` replays every history unit and
+should be closest to full replay.
+
+```bash
+CUDA_VISIBLE_DEVICES=0 \
+MINICPMO45_RUN_REAL_PROMPT_UPDATE_BENCH=1 \
+MINICPMO45_BENCH_INPUT_MODE=text \
+MINICPMO45_MODEL_PATH=/content/path/to/MiniCPM-o-4_5 \
+MINICPMO45_REF_AUDIO_PATH=/content/minicpm-o-agent/tests/cases/common/ref_audio/BH-Ref-HT-F224-Ref06_82_U001_话题_3_348s-355s.wav \
+MINICPMO45_HISTORY_UNITS=30 \
+MINICPMO45_RECACHE_LAST_UNITS=5 \
+MINICPMO45_NEW_PROMPT="Streaming Duplex Conversation! You must answer only as JSON tool calls when possible." \
+MINICPMO45_PROBE_TEXT="Given the previous messages, what should you remember?" \
+PYTHONPATH=src python -m pytest -q tests/test_real_duplex_prompt_update_benchmark.py -s
+```
+
+For a quick sweep:
+
+```bash
+for n in 0 3 5 10 all; do
+  echo "=== recache last units: $n ==="
+  CUDA_VISIBLE_DEVICES=0 \
+  MINICPMO45_RUN_REAL_PROMPT_UPDATE_BENCH=1 \
+  MINICPMO45_BENCH_INPUT_MODE=text \
+  MINICPMO45_MODEL_PATH=/content/path/to/MiniCPM-o-4_5 \
+  MINICPMO45_REF_AUDIO_PATH=/content/minicpm-o-agent/tests/cases/common/ref_audio/BH-Ref-HT-F224-Ref06_82_U001_话题_3_348s-355s.wav \
+  MINICPMO45_HISTORY_UNITS=30 \
+  MINICPMO45_RECACHE_LAST_UNITS=$n \
+  MINICPMO45_NEW_PROMPT="Streaming Duplex Conversation! You must answer only as JSON tool calls when possible." \
+  MINICPMO45_PROBE_TEXT="Given the previous messages, what should you remember?" \
+  PYTHONPATH=src python -m pytest -q tests/test_real_duplex_prompt_update_benchmark.py -s
+done
+```
+
 To run the same benchmark with text-only history instead of audio units:
 
 ```bash
