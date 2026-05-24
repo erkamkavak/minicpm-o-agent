@@ -28,20 +28,23 @@ This clones `erkamkavak/minicpm-o-agent` into `/content/minicpm-o-agent`:
 
 ## 3. Install Dependencies
 
-The service launcher expects `.venv/base`, so use the repo install script.
-Colab's Python image may be missing the matching `venv` package, so install it
-before running `install.sh`:
+This installs into the Colab runtime Python directly, without creating a virtual
+environment. `transformers==4.51.0` is pinned explicitly:
 
 ```bash
 %cd /content/minicpm-o-agent
-!sudo apt-get update -qq
-!PYVER=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')") && (sudo apt-get install -y -qq python${PYVER}-venv || sudo apt-get install -y -qq python3-venv)
-!PYTHON=python3 SKIP_FLASH_ATTN=1 bash install.sh
+%pip install -q "transformers==4.51.0"
+%pip install -q -r requirements.txt
+%pip install -q librosa soundfile
 ```
 
-If installation fails because Colab already has an incompatible package pinned
-after the venv package is installed, restart the runtime and run the install
-cell again before importing the project.
+If Colab does not already have PyTorch, install it too:
+
+```python
+import importlib.util, subprocess, sys
+if importlib.util.find_spec("torch") is None:
+    subprocess.run([sys.executable, "-m", "pip", "install", "-q", "torch", "torchaudio"], check=True)
+```
 
 ## 4. Configure The Model
 
@@ -71,20 +74,59 @@ cat config.json
 If the model is gated or you hit rate limits, log in first:
 
 ```bash
-!/content/minicpm-o-agent/.venv/base/bin/huggingface-cli login
+!huggingface-cli login
 ```
 
 ## 5. Start Worker And Gateway
 
-Run HTTP mode inside Colab. The public tunnel will provide HTTPS/WSS outside.
+Do not use `start_all.sh` in the no-venv Colab flow because that launcher
+expects `.venv/base/bin/python`. Start the worker and gateway directly instead:
 
-```bash
-%cd /content/minicpm-o-agent
-!CUDA_VISIBLE_DEVICES=0 bash start_all.sh --http
+```python
+import json, os, subprocess, time, urllib.request
+from pathlib import Path
+
+REPO_DIR = Path("/content/minicpm-o-agent")
+TMP_DIR = REPO_DIR / "tmp"
+TMP_DIR.mkdir(exist_ok=True)
+
+def read_json_url(url, timeout=5):
+    with urllib.request.urlopen(url, timeout=timeout) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+env = os.environ.copy()
+env["PYTHONPATH"] = str(REPO_DIR / "src")
+env["CUDA_VISIBLE_DEVICES"] = "0"
+
+worker_log = open(TMP_DIR / "worker_0.log", "w")
+worker_proc = subprocess.Popen(
+    ["python", "-m", "minicpmo_demo.server.worker", "--port", "22400", "--gpu-id", "0", "--worker-index", "0"],
+    cwd=REPO_DIR, env=env, stdout=worker_log, stderr=subprocess.STDOUT, text=True,
+)
+(TMP_DIR / "worker_0.pid").write_text(str(worker_proc.pid))
+
+while True:
+    try:
+        health = read_json_url("http://127.0.0.1:22400/health", timeout=3)
+        if health.get("model_loaded"):
+            print("Worker ready", health)
+            break
+    except Exception:
+        pass
+    print("Waiting for worker to load model...")
+    time.sleep(30)
+
+gateway_log = open(TMP_DIR / "gateway.log", "w")
+gateway_proc = subprocess.Popen(
+    ["python", "-m", "minicpmo_demo.server.gateway", "--port", "8006", "--workers", "localhost:22400", "--http"],
+    cwd=REPO_DIR, env=env, stdout=gateway_log, stderr=subprocess.STDOUT, text=True,
+)
+(TMP_DIR / "gateway.pid").write_text(str(gateway_proc.pid))
+time.sleep(3)
+print("Gateway health", read_json_url("http://127.0.0.1:8006/health"))
 ```
 
-The first start can take several minutes because model weights are downloaded
-and loaded. If the cell finishes with a failed worker, inspect:
+If startup fails, inspect:
 
 ```bash
 !tail -200 /content/minicpm-o-agent/tmp/worker_0.log
@@ -137,7 +179,7 @@ You can also test the Colab endpoint from the repo probe:
 
 ```bash
 %cd /content/minicpm-o-agent/examples/realtime
-!/content/minicpm-o-agent/.venv/base/bin/python audio_probe.py \
+!PYTHONPATH=/content/minicpm-o-agent/src python audio_probe.py \
   --url https://YOUR-TUNNEL.trycloudflare.com \
   --input-wav assets/test.wav \
   --region colab \
