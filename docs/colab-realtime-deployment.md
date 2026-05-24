@@ -17,34 +17,31 @@ free-tier GPUs may run out of memory when loading MiniCPM-o 4.5.
 
 ## 2. Clone This Repo
 
-Use your own fork/branch if you want the local `audio_ui.html` changes:
+This clones `erkamkavak/minicpm-o-agent` into `/content/minicpm-o-agent`:
 
 ```bash
 %cd /content
-!git clone https://github.com/YOUR_ORG/MiniCPM-o-Demo.git
-%cd /content/MiniCPM-o-Demo
-!git checkout YOUR_BRANCH
-```
-
-For the upstream repo instead:
-
-```bash
-%cd /content
-!git clone https://github.com/OpenBMB/MiniCPM-o-Demo.git
-%cd /content/MiniCPM-o-Demo
+!git clone --branch main https://github.com/erkamkavak/minicpm-o-agent.git /content/minicpm-o-agent
+%cd /content/minicpm-o-agent
+!git status --short
 ```
 
 ## 3. Install Dependencies
 
-The service launcher expects `.venv/base`, so use the repo install script:
+The service launcher expects `.venv/base`, so use the repo install script.
+Colab's Python image may be missing the matching `venv` package, so install it
+before running `install.sh`:
 
 ```bash
-%cd /content/MiniCPM-o-Demo
+%cd /content/minicpm-o-agent
+!sudo apt-get update -qq
+!PYVER=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')") && (sudo apt-get install -y -qq python${PYVER}-venv || sudo apt-get install -y -qq python3-venv)
 !PYTHON=python3 SKIP_FLASH_ATTN=1 bash install.sh
 ```
 
-If installation fails because Colab already has an incompatible package pinned,
-restart the runtime and run the install cell again before importing the project.
+If installation fails because Colab already has an incompatible package pinned
+after the venv package is installed, restart the runtime and run the install
+cell again before importing the project.
 
 ## 4. Configure The Model
 
@@ -52,7 +49,7 @@ For Hugging Face download at first model load:
 
 ```bash
 %%bash
-cd /content/MiniCPM-o-Demo
+cd /content/minicpm-o-agent
 cp configs/config.example.json config.json
 python - <<'PY'
 import json
@@ -74,7 +71,7 @@ cat config.json
 If the model is gated or you hit rate limits, log in first:
 
 ```bash
-!/content/MiniCPM-o-Demo/.venv/base/bin/huggingface-cli login
+!/content/minicpm-o-agent/.venv/base/bin/huggingface-cli login
 ```
 
 ## 5. Start Worker And Gateway
@@ -82,7 +79,7 @@ If the model is gated or you hit rate limits, log in first:
 Run HTTP mode inside Colab. The public tunnel will provide HTTPS/WSS outside.
 
 ```bash
-%cd /content/MiniCPM-o-Demo
+%cd /content/minicpm-o-agent
 !CUDA_VISIBLE_DEVICES=0 bash start_all.sh --http
 ```
 
@@ -90,8 +87,8 @@ The first start can take several minutes because model weights are downloaded
 and loaded. If the cell finishes with a failed worker, inspect:
 
 ```bash
-!tail -200 /content/MiniCPM-o-Demo/tmp/worker_0.log
-!tail -200 /content/MiniCPM-o-Demo/tmp/gateway.log
+!tail -200 /content/minicpm-o-agent/tmp/worker_0.log
+!tail -200 /content/minicpm-o-agent/tmp/gateway.log
 ```
 
 Health checks:
@@ -139,8 +136,8 @@ The gateway also exposes HTTP endpoints on the tunnel host, such as
 You can also test the Colab endpoint from the repo probe:
 
 ```bash
-%cd /content/MiniCPM-o-Demo/examples/realtime
-!/content/MiniCPM-o-Demo/.venv/base/bin/python audio_probe.py \
+%cd /content/minicpm-o-agent/examples/realtime
+!/content/minicpm-o-agent/.venv/base/bin/python audio_probe.py \
   --url https://YOUR-TUNNEL.trycloudflare.com \
   --input-wav assets/test.wav \
   --region colab \
@@ -163,5 +160,5 @@ You can also test the Colab endpoint from the repo probe:
 To stop the Colab service:
 
 ```bash
-!kill $(cat /content/MiniCPM-o-Demo/tmp/*.pid 2>/dev/null) 2>/dev/null || true
+!kill $(cat /content/minicpm-o-agent/tmp/*.pid 2>/dev/null) 2>/dev/null || true
 ```
