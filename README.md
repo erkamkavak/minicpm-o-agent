@@ -23,7 +23,7 @@ headers where present and adds local changes under the same license.
 - `configs/`: example service configuration.
 - `assets/`: backend presets, reference audio, samples, and VAD model assets.
 - `examples/realtime/`: API probes for realtime audio/video sessions.
-- `docs/`: backend protocol notes plus `docs/design/update-system-prompt-mid-session.md`.
+- `docs/`: backend protocol notes, Colab deployment notes, and `docs/design/update-system-prompt-mid-session.md`.
 - `tests/`: Python backend/API tests.
 
 ## Requirements
@@ -78,6 +78,10 @@ Useful endpoints:
 - `WS /ws/duplex/{session_id}`
 - `WS /v1/realtime`
 - `GET /docs`
+
+For a Colab GPU deployment of the realtime gateway, see
+[`docs/colab-realtime-deployment.md`](docs/colab-realtime-deployment.md) or run
+[`docs/colab-realtime-deployment.ipynb`](docs/colab-realtime-deployment.ipynb).
 
 ## Docker
 
