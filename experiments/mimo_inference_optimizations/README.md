@@ -23,6 +23,11 @@ python mimo_optimization_experiments.py --list
 The local environment must have PyTorch installed. Colab normally has PyTorch
 preinstalled; select a GPU runtime for more meaningful speed measurements.
 
+The notebook is Colab-friendly: when opened in Colab, the setup cell clones
+`https://github.com/erkamkavak/minicpm-o-agent.git` into
+`/content/minicpm-o-agent`, changes into this experiment directory, and runs the
+script from the cloned project. No separate upload of the `.py` file is needed.
+
 ## Experiment Map
 
 - `hybrid_swa`: compares full-attention decode/KV against a 5:1 SWA/full layer
