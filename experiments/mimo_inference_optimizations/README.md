@@ -28,6 +28,23 @@ The notebook is Colab-friendly: when opened in Colab, the setup cell clones
 `/content/minicpm-o-agent`, changes into this experiment directory, and runs the
 script from the cloned project. No separate upload of the `.py` file is needed.
 
+To study long-context Hybrid SWA behavior up to 128K tokens in Colab, run only
+the Hybrid SWA experiment:
+
+```bash
+python mimo_optimization_experiments.py \
+  --experiments hybrid_swa \
+  --hybrid-lengths 4k,8k,16k,32k,64k,128k \
+  --device auto \
+  --repeats 3 \
+  --warmup 1 \
+  --json results_hybrid_128k.json
+```
+
+This remains a toy attention/KV-cache benchmark, not a full 128K LLM prefill.
+It is meant to expose the KV-memory curve and decode-attention effect without
+requiring a real 128K-context model.
+
 ## Experiment Map
 
 - `hybrid_swa`: compares full-attention decode/KV against a 5:1 SWA/full layer

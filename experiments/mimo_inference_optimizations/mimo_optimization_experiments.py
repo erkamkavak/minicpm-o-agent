@@ -132,6 +132,28 @@ def fmt(value: float, digits: int = 2) -> str:
     return f"{value:.{digits}f}"
 
 
+def parse_count(value: str) -> int:
+    """Parse counts like 4096, 4k, 128k, or 1m using binary units."""
+    text = value.strip().lower().replace("_", "")
+    if not text:
+        raise ValueError("empty count")
+    multiplier = 1
+    if text.endswith("k"):
+        multiplier = 1024
+        text = text[:-1]
+    elif text.endswith("m"):
+        multiplier = 1024 * 1024
+        text = text[:-1]
+    return int(float(text) * multiplier)
+
+
+def parse_count_list(raw: str) -> list[int]:
+    values = [parse_count(item) for item in raw.split(",") if item.strip()]
+    if not values:
+        raise ValueError("count list cannot be empty")
+    return values
+
+
 # ---------------------------------------------------------------------------
 # Experiment 1: Hybrid SWA KV/decode
 # ---------------------------------------------------------------------------
@@ -150,16 +172,20 @@ def run_hybrid_swa_experiment(args) -> list[BenchRow]:
     set_seed(args.seed)
     torch.manual_seed(args.seed)
 
-    layers = 12 if args.quick else 24
+    layers = args.hybrid_layers or (12 if args.quick else 24)
     heads = 4
     head_dim = 32
-    window = 128
+    window = args.hybrid_window
     full_every = 6  # 5 SWA layers + 1 full layer, like the blog's 5:1 ratio.
     full_layers = [i for i in range(layers) if (i + 1) % full_every == 0]
     swa_layers = [i for i in range(layers) if i not in full_layers]
     dtype = torch.float16 if device.type == "cuda" else torch.float32
     itemsize = torch.tensor([], dtype=dtype).element_size()
-    lengths = [256, 512, 1024] if args.quick else [512, 1024, 2048, 4096]
+    lengths = (
+        parse_count_list(args.hybrid_lengths)
+        if args.hybrid_lengths
+        else ([256, 512, 1024] if args.quick else [512, 1024, 2048, 4096])
+    )
 
     rows: list[BenchRow] = []
     printed: list[dict[str, str]] = []
@@ -1018,6 +1044,21 @@ def main(argv: Iterable[str] | None = None) -> int:
     parser.add_argument("--warmup", type=int, default=2, help="Warmup runs per case.")
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--json", type=Path, help="Optional path to write raw result rows as JSON.")
+    parser.add_argument(
+        "--hybrid-lengths",
+        help="Hybrid SWA sequence lengths, e.g. 4k,8k,16k,32k,64k,128k.",
+    )
+    parser.add_argument(
+        "--hybrid-window",
+        type=int,
+        default=128,
+        help="Sliding-window size for Hybrid SWA layers.",
+    )
+    parser.add_argument(
+        "--hybrid-layers",
+        type=int,
+        help="Override Hybrid SWA layer count. Defaults to 12 with --quick, otherwise 24.",
+    )
     parser.add_argument("--list", action="store_true", help="List experiments and exit.")
     args = parser.parse_args(list(argv) if argv is not None else None)
 
